@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: DOLFINx-Adjoint
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Jørgen Schartum
+    family-names: Dokken
+    email: dokken@simula.no
+    affiliation: Simula Research Laboratory
+    orcid: 'https://orcid.org/0000-0001-6489-8858'
+repository-code: 'https://github.com/jorgensd/dxa'
+url: 'https://jsdokken.com/dxa'
+abstract: >-
+  Adjoint framework for DOLFINx
+keywords:
+  - FEM
+  - FEniCSx
+  - Adjoint
+  - Optimization
+license: MIT
+version: v0.1.0
+date-released: '2023-04-04'
