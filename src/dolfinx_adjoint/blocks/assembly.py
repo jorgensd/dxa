@@ -1,43 +1,74 @@
+import typing
+
 from mpi4py import MPI
+
 import dolfinx
+import numpy as np
+import numpy.typing as npt
 import ufl
 from pyadjoint import Block, create_overloaded_object
 from ufl.formatting.ufl2unicode import ufl2unicode
-import typing
-import numpy.typing as npt
-import numpy as np
+
+
+def assemble_compiled_form(
+    form: dolfinx.fem.Form, tensor: typing.Optional[dolfinx.la.Vector] = None
+) -> dolfinx.la.Vector:
+    """Assemble a compiled form and optionally apply Dirichlet boundary condition.
+
+    Args:
+        form: Compiled form to assemble.
+        tensor: Optional vector to which the assembled form will be added.
+
+    """
+
+    if form.rank == 1:
+        tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
+        dolfinx.fem.assemble_vector(tensor.array, form)
+        tensor.scatter_reverse(dolfinx.la.InsertMode.add)
+    else:
+        raise NotImplementedError("Only 1-form assembly is currently supported.")
+    return tensor
 
 
 class AssembleBlock(Block):
     def __init__(
-        self, form: ufl.Form, ad_block_tag: typing.Optional[str] = None,
+        self,
+        form: ufl.Form,
+        ad_block_tag: typing.Optional[str] = None,
         jit_options: typing.Optional[dict] = None,
         form_compiler_options: typing.Optional[dict] = None,
-        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]]=None
+        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
     ):
         super(AssembleBlock, self).__init__(ad_block_tag=ad_block_tag)
- 
+
+        # Store the options for code generation
         self._jit_options = jit_options
         self._form_compiler_options = form_compiler_options
         self._entity_maps = entity_maps
+
+        # Store compiled and original form
         self.form = form
         self.compiled_form = dolfinx.fem.form(
-            form,
-            jit_options=jit_options,
-            form_compiler_options=form_compiler_options,
-            entity_maps=entity_maps
+            form, jit_options=jit_options, form_compiler_options=form_compiler_options, entity_maps=entity_maps
         )
 
         # NOTE: Add when we want to do shape optimization
-        #mesh = self.form.ufl_domain().ufl_cargo()
-        #self.add_dependency(mesh)
+        # mesh = self.form.ufl_domain().ufl_cargo()
+        # self.add_dependency(mesh)
         for coefficient in self.form.coefficients():
             self.add_dependency(coefficient, no_duplicates=True)
+
     def __str__(self):
         return f"assemble({ufl2unicode(self.form)})"
 
     def compute_action_adjoint(
-        self, adj_input, arity_form, form=None, c_rep=None, space=None, dform=None
+        self,
+        adj_input,
+        arity_form,
+        form: typing.Optional[ufl.Form] = None,
+        c_rep=None,
+        space: typing.Optional[dolfinx.fem.FunctionSpace] = None,
+        dform: typing.Optional[dolfinx.fem.Form] = None,
     ):
         """This computes the action of the adjoint of the derivative of `form` wrt `c_rep` on `adj_input`.
         In other words, it returns: `<(dform/dc_rep)*, adj_input>`
@@ -49,19 +80,23 @@ class AssembleBlock(Block):
           and then apply the action on `adj_input`, to finally assemble the result.
         """
         if arity_form == 0:
+            assert arity_form == self.compiled_form.rank, "Inconsistent arity of input form and block form."
             if dform is None:
                 dc = ufl.TestFunction(space)
                 dform = ufl.derivative(form, c_rep, dc)
-            
-            compiled_adjoint = dolfinx.fem.form(dform, jit_options=self._jit_options,
-                                                form_compiler_options=self._form_compiler_options,
-                                                entity_maps=self._entity_maps)
-            # FIXME: Cache the creation of this vector for future usage
-            dform_vector = dolfinx.fem.assemble_vector(compiled_adjoint)
-            dform_vector.scatter_reverse(dolfinx.la.InsertMode.add)
+
+            compiled_adjoint = dolfinx.fem.form(
+                dform,
+                jit_options=self._jit_options,
+                form_compiler_options=self._form_compiler_options,
+                entity_maps=self._entity_maps,
+            )
+
+            # NOTE: Cannot cache tensor, as FunctionSpace is not hashable.
+            dform_vector = assemble_compiled_form(compiled_adjoint)
+
             # Return a Vector scaled by the scalar `adj_input`
             dform_vector.array[:] *= adj_input
-
             return dform_vector, dform
         # elif arity_form == 1:
         #     if dform is None:
@@ -100,9 +135,7 @@ class AssembleBlock(Block):
         form = ufl.replace(self.form, replaced_coeffs)
         return form
 
-    def evaluate_adj_component(
-        self, inputs, adj_inputs, block_variable, idx, prepared=None
-    ):
+    def evaluate_adj_component(self, inputs, adj_inputs, block_variable, idx, prepared=None):
         form = prepared
         adj_input = adj_inputs[0]
         c = block_variable.output
@@ -126,37 +159,38 @@ class AssembleBlock(Block):
     def prepare_evaluate_tlm(self, inputs, tlm_inputs, relevant_outputs):
         return self.prepare_evaluate_adj(inputs, tlm_inputs, self.get_dependencies())
 
-    def evaluate_tlm_component(
-        self, inputs, tlm_inputs, block_variable, idx, prepared=None
-    ):
+    def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None):
         form = prepared
         dform = 0.0
 
-        from ufl_legacy.algorithms.analysis import extract_arguments
+        from ufl.algorithms.analysis import extract_arguments
 
         arity_form = len(extract_arguments(form))
         for bv in self.get_dependencies():
             c_rep = bv.saved_output
             tlm_value = bv.tlm_value
-
             if tlm_value is None:
                 continue
-            if isinstance(c_rep, dolfin.Mesh):
-                X = dolfin.SpatialCoordinate(c_rep)
-                dform += dolfin.derivative(form, X, tlm_value)
+            if isinstance(c_rep, dolfinx.mesh.Mesh):
+                X = ufl.SpatialCoordinate(c_rep)
+                dform += ufl.derivative(form, X, tlm_value)
             else:
-                dform += dolfin.derivative(form, c_rep, tlm_value)
+                dform += ufl.derivative(form, c_rep, tlm_value)
         if not isinstance(dform, float):
             dform = ufl.algorithms.expand_derivatives(dform)
-            dform = assemble_adjoint_value(dform)
+            compiled_form = dolfinx.fem.form(
+                dform,
+                jit_options=self._jit_options,
+                form_compiler_options=self._form_compiler_options,
+                entity_maps=self._entity_maps,
+            )
+            dform = assemble_compiled_form(compiled_form)
             if arity_form == 1 and dform != 0:
                 # Then dform is a Vector
                 dform = dform.function
         return dform
 
-    def prepare_evaluate_hessian(
-        self, inputs, hessian_inputs, adj_inputs, relevant_dependencies
-    ):
+    def prepare_evaluate_hessian(self, inputs, hessian_inputs, adj_inputs, relevant_dependencies):
         return self.prepare_evaluate_adj(inputs, adj_inputs, relevant_dependencies)
 
     def evaluate_hessian_component(
@@ -194,9 +228,7 @@ class AssembleBlock(Block):
         else:
             return None
 
-        hessian_outputs, dform = self.compute_action_adjoint(
-            hessian_input, arity_form, form, c1_rep, space
-        )
+        hessian_outputs, dform = self.compute_action_adjoint(hessian_input, arity_form, form, c1_rep, space)
 
         ddform = 0
         for other_idx, bv in relevant_dependencies:
@@ -215,9 +247,7 @@ class AssembleBlock(Block):
         if not isinstance(ddform, float):
             ddform = ufl.algorithms.expand_derivatives(ddform)
             if not ddform.empty():
-                hessian_outputs += self.compute_action_adjoint(
-                    adj_input, arity_form, dform=ddform
-                )[0]
+                hessian_outputs += self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
 
         if isinstance(c1, dolfin.function.expression.BaseExpression):
             return [(hessian_outputs, space)]
@@ -229,10 +259,13 @@ class AssembleBlock(Block):
 
     def recompute_component(self, inputs, block_variable, idx, prepared):
         form = prepared
-        
-        compiled_form = dolfinx.fem.form(form, jit_options=self._jit_options,
-                                                form_compiler_options=self._form_compiler_options,
-                                                entity_maps=self._entity_maps)
+
+        compiled_form = dolfinx.fem.form(
+            form,
+            jit_options=self._jit_options,
+            form_compiler_options=self._form_compiler_options,
+            entity_maps=self._entity_maps,
+        )
         local_output = dolfinx.fem.assemble_scalar(compiled_form)
         comm = compiled_form.mesh.comm
         output = comm.allreduce(local_output, op=MPI.SUM)

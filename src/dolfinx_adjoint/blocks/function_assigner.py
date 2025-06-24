@@ -1,10 +1,13 @@
-from mpi4py import MPI
-from pyadjoint import AdjFloat, Block, OverloadedType
 import typing
-import ufl
+
+from mpi4py import MPI
+
 import dolfinx
-from dolfinx_adjoint.utils import function_from_vector
+import ufl
+from pyadjoint import AdjFloat, Block, OverloadedType
 from ufl.formatting.ufl2unicode import ufl2unicode
+
+from dolfinx_adjoint.utils import function_from_vector
 
 
 class FunctionAssignBlock(Block):
@@ -45,9 +48,7 @@ class FunctionAssignBlock(Block):
         expr = self._replace_with_saved_output()
         return expr, adj_input_func
 
-    def evaluate_adj_component(
-        self, inputs, adj_inputs, block_variable, idx, prepared=None
-    ):
+    def evaluate_adj_component(self, inputs, adj_inputs, block_variable, idx, prepared=None):
         if self.expr is None:
             if isinstance(block_variable.output, AdjFloat):
                 # Adjoint of a broadcast is just a sum
@@ -58,18 +59,18 @@ class FunctionAssignBlock(Block):
                     return comm.allreduce(sum(vec.array[:local_size]), op=MPI.SUM)
                 else:
                     try:
-                        return adj_inputs[0].sum()                    
+                        return adj_inputs[0].sum()
                     except AttributeError:
                         # Catch the case where adj_inputs[0] is just a float
                         return adj_inputs[0]
-            elif isinstance(func:=block_variable.output, dolfinx.fem.Function):
+            elif isinstance(func := block_variable.output, dolfinx.fem.Function):
                 adj_output = dolfinx.fem.Function(func.function_space)
                 assert func.function_space == prepared.function_space
                 adj_output.x.array[:] = prepared.x.array[:]
                 return adj_output.x
             else:
                 raise NotImplementedError(f"Adjoint for {block_variable=} not implemented.")
-            #elif isinstance(block_variable.output, dolfinx.fem.Constant):
+            # elif isinstance(block_variable.output, dolfinx.fem.Constant):
         #         R = block_variable.output._ad_function_space(prepared.function_space.mesh)
         #         return self._adj_assign_constant(prepared, R)
         #     else:
@@ -125,9 +126,7 @@ class FunctionAssignBlock(Block):
 
         return self._replace_with_saved_output()
 
-    def evaluate_tlm_component(
-        self, inputs, tlm_inputs, block_variable, idx, prepared=None
-    ):
+    def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None):
         if self.expr is None:
             return tlm_inputs[0]
 
@@ -136,18 +135,12 @@ class FunctionAssignBlock(Block):
         dudmi = dolfinx.fem.Function(block_variable.output.function_space)
         for dep in self.get_dependencies():
             if dep.tlm_value:
-                dudmi.assign(
-                    ufl.algorithms.expand_derivatives(
-                        ufl.derivative(expr, dep.saved_output, dep.tlm_value)
-                    )
-                )
+                dudmi.assign(ufl.algorithms.expand_derivatives(ufl.derivative(expr, dep.saved_output, dep.tlm_value)))
                 dudm.vector().axpy(1.0, dudmi.vector())
 
         return dudm
 
-    def prepare_evaluate_hessian(
-        self, inputs, hessian_inputs, adj_inputs, relevant_dependencies
-    ):
+    def prepare_evaluate_hessian(self, inputs, hessian_inputs, adj_inputs, relevant_dependencies):
         return self.prepare_evaluate_adj(inputs, hessian_inputs, relevant_dependencies)
 
     def evaluate_hessian_component(
@@ -162,9 +155,7 @@ class FunctionAssignBlock(Block):
     ):
         # Current implementation assumes lincom in hessian,
         # otherwise we need second-order derivatives here.
-        return self.evaluate_adj_component(
-            inputs, hessian_inputs, block_variable, idx, prepared
-        )
+        return self.evaluate_adj_component(inputs, hessian_inputs, block_variable, idx, prepared)
 
     def prepare_recompute_component(self, inputs, relevant_outputs):
         if self.expr is None:
@@ -173,7 +164,6 @@ class FunctionAssignBlock(Block):
         return self._replace_with_saved_output()
 
     def recompute_component(self, inputs, block_variable, idx, prepared):
-
         if self.expr is None:
             prepared = inputs[0]
         output = dolfinx.fem.Function(block_variable.output.function_space)

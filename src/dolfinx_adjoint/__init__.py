@@ -1,16 +1,17 @@
 """Top-level package for dxa."""
 
-from .types import Function
-from .function import assign
-from .assembly import assemble_scalar
 from importlib.metadata import metadata
 
+from .assembly import assemble_scalar
+from .function import assign
+from .types import Function
+
 meta = metadata("dolfinx_adjoint")
-__version__ = meta["Version"]
-__author__ = meta["Author"]
-__license__ = meta["License"]
-__email__ = meta["Author-email"]
-__program_name__ = meta["Name"]
+__version__ = meta.get("Version")
+__license__ = meta.get("License")
+__author__ = meta.get("Author")
+__email__ = meta.get("Author-email")
+__program_name__ = meta.get("Name")
 
 
 __all__ = [

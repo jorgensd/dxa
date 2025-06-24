@@ -1,9 +1,11 @@
 from mpi4py import MPI
+
 import dolfinx
-from pyadjoint.tape import get_working_tape, stop_annotating, annotate_tape
-from pyadjoint.overloaded_type import create_overloaded_object
-from .blocks.assembly import AssembleBlock
 import ufl
+from pyadjoint.overloaded_type import create_overloaded_object
+from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
+
+from .blocks.assembly import AssembleBlock
 
 
 def assemble_scalar(form: ufl.Form, **kwargs):
@@ -32,8 +34,8 @@ def assemble_scalar(form: ufl.Form, **kwargs):
         local_output = dolfinx.fem.assemble_scalar(compiled_form)
         comm = compiled_form.mesh.comm
         output = comm.allreduce(local_output, op=MPI.SUM)
-        assert isinstance(output, (float, complex))
-    
+        assert isinstance(output, float)
+
     output = create_overloaded_object(output)
 
     if annotate:

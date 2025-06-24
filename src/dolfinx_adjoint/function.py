@@ -1,10 +1,12 @@
-from typing import TypedDict, Optional
-from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
-from pyadjoint.overloaded_type import create_overloaded_object
-from .blocks.function_assigner import FunctionAssignBlock
-import numpy
+from typing import Optional, TypedDict
+
 import dolfinx
+import numpy
 import ufl
+from pyadjoint.overloaded_type import create_overloaded_object
+from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
+
+from .blocks.function_assigner import FunctionAssignBlock
 
 
 class assign_kwargs(TypedDict):
@@ -14,9 +16,7 @@ class assign_kwargs(TypedDict):
     """Whether to annotate the assignment in the adjoint tape."""
 
 
-def assign(
-    value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: assign_kwargs
-):
+def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: assign_kwargs):
     """Assign a `value` to a `dolfinx.fem.Function`.
 
     Args:
