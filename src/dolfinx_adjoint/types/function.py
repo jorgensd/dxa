@@ -10,7 +10,7 @@ import numpy
 
 
 @register_overloaded_type
-class Function(dolfinx.fem.Function, FloatingType):
+class Function(FloatingType, dolfinx.fem.Function):
     def __init__(
         self,
         V: dolfinx.fem.FunctionSpace,
@@ -19,11 +19,6 @@ class Function(dolfinx.fem.Function, FloatingType):
         dtype: numpy.dtype = dolfinx.default_scalar_type,
         **kwargs,
     ):
-        """
-        Note that it is important that the class inherits from the native DOLFINx object first,
-        as this is how we extract data in FFCx.
-
-        """
         super(Function, self).__init__(
             V,
             x,

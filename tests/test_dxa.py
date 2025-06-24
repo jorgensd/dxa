@@ -20,7 +20,7 @@ def mesh_3D():
     return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 10, 10, 10)
 
 @pytest.mark.parametrize("mesh_var_name", ["mesh_1D", "mesh_2D", "mesh_3D"])
-def test_assign(mesh_var_name, request):
+def test_assign(mesh_var_name: str, request):
     pyadjoint.set_working_tape(pyadjoint.Tape())
     pyadjoint.continue_annotation()
 
