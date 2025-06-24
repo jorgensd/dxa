@@ -22,4 +22,4 @@ def function_from_vector(
     """
     if not isinstance(vector, dolfinx.la.Vector):
         vector = dolfinx.la.Vector(vector)
-    return dolfinx.Function(V, x=vector)
+    return dolfinx.fem.Function(V, x=vector)

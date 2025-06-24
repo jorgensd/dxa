@@ -28,7 +28,6 @@ def assemble_scalar(form: ufl.Form, **kwargs):
             form_compiler_options=kwargs.pop("form_compiler_options", None),
             entity_maps=kwargs.pop("entity_maps", None),
         )
-        compiled_form._original_ufl_form = form
 
         local_output = dolfinx.fem.assemble_scalar(compiled_form)
         comm = compiled_form.mesh.comm
@@ -37,7 +36,7 @@ def assemble_scalar(form: ufl.Form, **kwargs):
         output = create_overloaded_object(output)
 
         if annotate:
-            block = AssembleBlock(compiled_form, ad_block_tag=ad_block_tag)
+            block = AssembleBlock(form, ad_block_tag=ad_block_tag)
 
             tape = get_working_tape()
             tape.add_block(block)
