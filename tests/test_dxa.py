@@ -6,7 +6,7 @@ import pyadjoint
 import pytest
 import ufl
 
-from dolfinx_adjoint import Function, assemble_scalar, assign
+from dolfinx_adjoint import Function, assemble_scalar
 
 
 @pytest.fixture(scope="module")
@@ -45,11 +45,11 @@ def test_assign(mesh_var_name: str, request):
     # # FIXME: Add time dependent PDE
 
     # assign(v, u)
-    x= ufl.SpatialCoordinate(mesh)
-    c = x[0]#0.3
+    x = ufl.SpatialCoordinate(mesh)
+    c = x[0]  # 0.3
     p = 100
-    error = p*ufl.inner(v - c, v - c) * ufl.dx(domain=mesh)
-    #error = (u-c)*ufl.dx
+    error = p * ufl.inner(v - c, v - c) * ufl.dx(domain=mesh)
+    # error = (u-c)*ufl.dx
     J = assemble_scalar(error)
 
     control = pyadjoint.Control(v)
@@ -61,9 +61,9 @@ def test_assign(mesh_var_name: str, request):
     # DEBUG: check differentiation
     dJdm_adj = Jh.derivative()
     print(dJdm_adj, p * (float(d) - c))
-    #breakpoint()
-    #assert numpy.isclose(dJdm_adj, 2*(d-c))
-    #breakpoint()
+    # breakpoint()
+    # assert numpy.isclose(dJdm_adj, 2*(d-c))
+    # breakpoint()
 
     # DEBUG: check tlm
     # NOTE: Need to overload `dolfinx.fem.Constant` to support Hessian/TLM of such a problem.
@@ -74,20 +74,20 @@ def test_assign(mesh_var_name: str, request):
     for x in [0.2, 0.4, -0.2, 0.5, -1.3]:
         x_vec = Function(V)
         x_vec.x.array[:] = x
-        #assert numpy.isclose(Jh(x_vec), p*(x - c) ** 2)
+        # assert numpy.isclose(Jh(x_vec), p*(x - c) ** 2)
 
     # DEBUG: Check minimzation call
     tol = 1e-9
-    opt = pyadjoint.minimize(Jh, method = "CG",
-                 tol=tol, options={"maxiter": 200, "disp": True})
+    opt = pyadjoint.minimize(Jh, method="CG", tol=tol, options={"maxiter": 200, "disp": True})
     print(Jh(opt))
     print(opt.x.array)
 
     def u_ex(x):
         return x[0]
+
     u_opt = dolfinx.fem.Function(V)
     u_opt.interpolate(u_ex)
 
-    numpy.testing.assert_allclose(opt.x.array, u_opt.x.array, rtol=100*tol, atol=100*tol)
+    numpy.testing.assert_allclose(opt.x.array, u_opt.x.array, rtol=100 * tol, atol=100 * tol)
     # breakpoint()
     # assert numpy.isclose(opt, c)

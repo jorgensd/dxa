@@ -5,12 +5,14 @@ import numpy
 from pyadjoint.overloaded_type import (
     FloatingType,
     create_overloaded_object,
+    get_overloaded_class,
     register_overloaded_type,
-    get_overloaded_class
 )
 from pyadjoint.tape import no_annotations
-from dolfinx_adjoint.utils import function_from_vector, gather
+
 from dolfinx_adjoint import assign
+from dolfinx_adjoint.utils import function_from_vector, gather
+
 
 class Function(dolfinx.fem.Function, FloatingType):
     def __init__(
@@ -57,14 +59,12 @@ class Function(dolfinx.fem.Function, FloatingType):
 
     @no_annotations
     def _ad_convert_type(self, value: dolfinx.la.Vector, options=None):
-        """ Convert a vector to a Riesz representation of the function."""
+        """Convert a vector to a Riesz representation of the function."""
 
         options = {} if options is None else options
         riesz_representation = options.get("riesz_representation", "l2")
         if riesz_representation == "l2":
-            return create_overloaded_object(
-                function_from_vector(self.function_space, value)
-            )
+            return create_overloaded_object(function_from_vector(self.function_space, value))
         # elif riesz_representation == "L2":
         #     ret = Function(self.function_space())
         #     u = dolfin.TrialFunction(self.function_space())
@@ -84,8 +84,7 @@ class Function(dolfinx.fem.Function, FloatingType):
         # elif callable(riesz_representation):
         #     return riesz_representation(value)
         else:
-            raise NotImplementedError(
-                "Unknown Riesz representation %s" % riesz_representation)
+            raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
 
     @staticmethod
     def _ad_to_list(m):
@@ -104,14 +103,15 @@ class Function(dolfinx.fem.Function, FloatingType):
         return r
 
     @staticmethod
-    def _ad_assign_numpy(dst: dolfinx.fem.Function, src: numpy.ndarray, offset:int):
+    def _ad_assign_numpy(dst: dolfinx.fem.Function, src: numpy.ndarray, offset: int):
         range_begin, range_end = dst.x.index_map.local_range
         range_begin *= dst.x.block_size
         range_end *= dst.x.block_size
-        m_a_local = src[offset + range_begin:offset + range_end]
-        dst.x.array[:len(m_a_local)] = m_a_local
+        m_a_local = src[offset + range_begin : offset + range_end]
+        dst.x.array[: len(m_a_local)] = m_a_local
         offset += dst.x.index_map.size_local * dst.x.block_size
         dst.x.scatter_forward()
         return dst, offset
+
 
 register_overloaded_type(Function, (dolfinx.fem.Function, Function))

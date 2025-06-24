@@ -1,9 +1,9 @@
 import typing
 
 import dolfinx
-
-import numpy 
+import numpy
 import numpy.typing as npt
+
 
 def function_from_vector(
     V: dolfinx.fem.FunctionSpace,
