@@ -5,49 +5,25 @@ requires = ["setuptools>=61.0.0", "wheel"]
 name = "dolfinx_adjoint"
 version = "0.1.0"
 description = "Automatic differentation compatible with DOLFINx"
-authors = [{name = "Jørgen S. Dokken", email = "dokken@simula.no"}]
-license = {file = "LICENSE"}
+authors = [{ name = "Jørgen S. Dokken", email = "dokken@simula.no" }]
+license = { file = "LICENSE" }
 readme = "README.md"
-
+dependencies = ["fenics-dolfinx>0.9.0", "pyadjoint-ad"]
 
 
 [project.optional-dependencies]
-test = [
-    "pytest",
-]
-dev = [
-    "pdbpp",
-    "ipython",
-"mypy",
-    "flake8",
-]
-docs = [
-   "jupyter-book",
-   "jupytext",
-]
-all = [
-   "dolfinx_adjoint[test]",
-   "dolfinx_adjoint[dev]",
-   "dolfinx_adjoint[docs]"
-]
+test = ["pytest"]
+dev = ["pdbpp", "ipython", "mypy", "flake8"]
+docs = ["jupyter-book", "jupytext"]
+all = ["dolfinx_adjoint[test]", "dolfinx_adjoint[dev]", "dolfinx_adjoint[docs]"]
 
 [tool.pytest.ini_options]
-addopts = [
-   "--import-mode=importlib",
-]
-testpaths = [
-    "tests"
-]
+addopts = ["--import-mode=importlib"]
+testpaths = ["tests"]
 
 [tool.mypy]
 ignore_missing_imports = true
 # Folders to exclude
-exclude = [
-    "docs/",
-    "build/"
-]
+exclude = ["docs/", "build/"]
 # Folder to check with mypy
-files = [
-    "src",
-    "tests"
-]
+files = ["src", "tests"]
