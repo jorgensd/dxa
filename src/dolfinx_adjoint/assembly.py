@@ -32,18 +32,16 @@ def assemble_scalar(form: ufl.Form, **kwargs):
         local_output = dolfinx.fem.assemble_scalar(compiled_form)
         comm = compiled_form.mesh.comm
         output = comm.allreduce(local_output, op=MPI.SUM)
-    if isinstance(output, float):
-        output = create_overloaded_object(output)
+        assert isinstance(output, (float, complex))
+    
+    output = create_overloaded_object(output)
 
-        if annotate:
-            block = AssembleBlock(form, ad_block_tag=ad_block_tag)
+    if annotate:
+        block = AssembleBlock(form, ad_block_tag=ad_block_tag)
 
-            tape = get_working_tape()
-            tape.add_block(block)
+        tape = get_working_tape()
+        tape.add_block(block)
 
-            block.add_output(output.block_variable)
-    else:
-        # Assembled a vector or matrix
-        output.form = form
+        block.add_output(output.block_variable)
 
     return output

@@ -24,11 +24,12 @@ class FunctionAssignBlock(Block):
             #     if isinstance(op, OverloadedType):
             #         self.add_dependency(op, no_duplicates=True)
             # self.expr = other
+        else:
+            raise NotImplementedError("We should not get here!")
 
     def _replace_with_saved_output(self):
         if self.expr is None:
             return None
-
         replace_map = {}
         for dep in self.get_dependencies():
             replace_map[dep.output] = dep.saved_output
@@ -61,6 +62,13 @@ class FunctionAssignBlock(Block):
                     except AttributeError:
                         # Catch the case where adj_inputs[0] is just a float
                         return adj_inputs[0]
+            elif isinstance(func:=block_variable.output, dolfinx.fem.Function):
+                adj_output = dolfinx.fem.Function(func.function_space)
+                assert func.function_space == prepared.function_space
+                adj_output.x.array[:] = prepared.x.array[:]
+                return adj_output.x
+            else:
+                raise NotImplementedError(f"Adjoint for {block_variable=} not implemented.")
             #elif isinstance(block_variable.output, dolfinx.fem.Constant):
         #         R = block_variable.output._ad_function_space(prepared.function_space.mesh)
         #         return self._adj_assign_constant(prepared, R)
@@ -161,13 +169,20 @@ class FunctionAssignBlock(Block):
     def prepare_recompute_component(self, inputs, relevant_outputs):
         if self.expr is None:
             return None
+        breakpoint()
         return self._replace_with_saved_output()
 
     def recompute_component(self, inputs, block_variable, idx, prepared):
+
         if self.expr is None:
             prepared = inputs[0]
         output = dolfinx.fem.Function(block_variable.output.function_space)
-        output.x.array[:] = prepared
+        try:
+            if output.function_space == prepared.function_space:
+                output.x.array[:] = prepared.x.array[:]
+        except AttributeError:
+            # Handling float value
+            output.x.array[:] = prepared
         return output
 
     def __str__(self):
