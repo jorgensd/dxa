@@ -25,6 +25,11 @@ def assemble_compiled_form(
         tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
         dolfinx.fem.assemble_vector(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
+    elif form.rank == 0:
+        local_val = dolfinx.fem.assemble_scalar(form)
+        comm = form.mesh.comm
+        tensor = comm.allreduce(local_val, op=MPI.SUM)
+
     else:
         raise NotImplementedError("Only 1-form assembly is currently supported.")
     return tensor
@@ -207,23 +212,20 @@ class AssembleBlock(Block):
         hessian_input = hessian_inputs[0]
         adj_input = adj_inputs[0]
 
-        from ufl_legacy.algorithms.analysis import extract_arguments
+        from ufl.algorithms.analysis import extract_arguments
 
         arity_form = len(extract_arguments(form))
 
         c1 = block_variable.output
         c1_rep = block_variable.saved_output
 
-        if isinstance(c1, dolfin.Constant):
-            mesh = extract_mesh_from_form(form)
+        if isinstance(c1, dolfinx.fem.Constant):
+            mesh = form.ufl_domain()
             space = c1._ad_function_space(mesh)
-        elif isinstance(c1, dolfin.Function):
-            space = c1.function_space()
-        elif isinstance(c1, dolfin.function.expression.BaseExpression):
-            mesh = form.ufl_domain().ufl_cargo()
-            space = c1._ad_function_space(mesh)
-        elif isinstance(c1, dolfin.Mesh):
-            c1_rep = dolfin.SpatialCoordinate(c1)
+        elif isinstance(c1, dolfinx.fem.Function):
+            space = c1.function_space
+        elif isinstance(c1, dolfinx.mesh.Mesh):
+            c1_rep = ufl.SpatialCoordinate(c1)
             space = c1._ad_function_space()
         else:
             return None
@@ -238,21 +240,21 @@ class AssembleBlock(Block):
             if tlm_input is None:
                 continue
 
-            if isinstance(c2_rep, dolfin.Mesh):
-                X = dolfin.SpatialCoordinate(c2_rep)
-                ddform += dolfin.derivative(dform, X, tlm_input)
+            if isinstance(c2_rep, dolfinx.mesh.Mesh):
+                X = ufl.SpatialCoordinate(c2_rep)
+                ddform += ufl.derivative(dform, X, tlm_input)
             else:
-                ddform += dolfin.derivative(dform, c2_rep, tlm_input)
+                ddform += ufl.derivative(dform, c2_rep, tlm_input)
 
         if not isinstance(ddform, float):
             ddform = ufl.algorithms.expand_derivatives(ddform)
             if not ddform.empty():
-                hessian_outputs += self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
-
-        if isinstance(c1, dolfin.function.expression.BaseExpression):
-            return [(hessian_outputs, space)]
-        else:
-            return hessian_outputs
+                adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
+                try:
+                    hessian_outputs += adj_action
+                except TypeError:
+                    hessian_outputs.array[:] += adj_action.array[:]
+        return hessian_outputs
 
     def prepare_recompute_component(self, inputs, relevant_outputs):
         return self.prepare_evaluate_adj(inputs, None, None)

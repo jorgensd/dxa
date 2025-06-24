@@ -36,7 +36,7 @@ def test_assign(mesh_var_name: str, request):
     u.name = "u_output"
 
     # Control variable
-    d = pyadjoint.AdjFloat(0.2)
+    # d = pyadjoint.AdjFloat(0.2)
 
     v = Function(V)
     v.name = "v"
@@ -60,16 +60,18 @@ def test_assign(mesh_var_name: str, request):
 
     # DEBUG: check differentiation
     dJdm_adj = Jh.derivative()
-    print(dJdm_adj, p * (float(d) - c))
+    print(dJdm_adj.x.array)
+    # print(dJdm_adj, p * (float(d) - c))
     # breakpoint()
     # assert numpy.isclose(dJdm_adj, 2*(d-c))
     # breakpoint()
 
     # DEBUG: check tlm
     # NOTE: Need to overload `dolfinx.fem.Constant` to support Hessian/TLM of such a problem.
-    # h = pyadjoint.AdjFloat(0.5)
-    # a2, b2 = Jh.hessian(h)
-
+    h = dolfinx.fem.Function(V)
+    h.interpolate(lambda x: numpy.sin(x[0]))
+    Hval = Jh.hessian(h)
+    print(Hval.x.array)
     # DEBUG: Check the value of the functional
     for x in [0.2, 0.4, -0.2, 0.5, -1.3]:
         x_vec = Function(V)
