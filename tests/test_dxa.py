@@ -8,26 +8,24 @@ import ufl
 import pytest
 
 @pytest.fixture(scope="module")
-def mesh1():
+def mesh_1D():
     return dolfinx.mesh.create_unit_interval(MPI.COMM_WORLD, 10)
 
 @pytest.fixture(scope="module")
-def mesh2():
+def mesh_2D():
     return dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
 
 @pytest.fixture(scope="module")
-def mesh3():
+def mesh_3D():
     return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 10, 10, 10)
 
-@pytest.mark.parametrize("mesh", [mesh1, mesh2, mesh3])
-def test_assign(mesh):
+@pytest.mark.parametrize("mesh_var_name", ["mesh_1D", "mesh_2D", "mesh_3D"])
+def test_assign(mesh_var_name, request):
     pyadjoint.set_working_tape(pyadjoint.Tape())
     pyadjoint.continue_annotation()
 
+    mesh = request.getfixturevalue(mesh_var_name)
 
-
-
-    mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
     V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
     u = Function(V)
     u.name = "u_output"
