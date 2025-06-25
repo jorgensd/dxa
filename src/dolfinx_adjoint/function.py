@@ -7,6 +7,7 @@ import numpy
 import ufl
 from pyadjoint.overloaded_type import create_overloaded_object
 from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
+
 try:
     import typing_extensions as typing
 except ModuleNotFoundError:

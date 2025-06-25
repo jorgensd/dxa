@@ -37,7 +37,6 @@ def test_function_control(mesh_var_name: str, request):
     v.name = "v"
     v.x.array[:] = 0.2
 
-
     def u_ex(mod, x):
         return x[0]
 
@@ -87,7 +86,6 @@ def test_function_control(mesh_var_name: str, request):
             "jit_options": {"cffi_extra_compile_args": ["-Ofast", "-march=native"], "cffi_libraries": ["m"]},
         },
     )
-
 
     u_opt = dolfinx.fem.Function(V)
     u_opt.interpolate(lambda x: u_ex(numpy, x))

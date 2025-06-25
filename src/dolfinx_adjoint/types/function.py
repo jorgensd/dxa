@@ -153,7 +153,7 @@ class Function(dolfinx.fem.Function, FloatingType):
 
             u = ufl.TrialFunction(self.function_space)
             v = ufl.TestFunction(self.function_space)
-            riesz_form = ufl.inner(u, v) * ufl.dx  + ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+            riesz_form = ufl.inner(u, v) * ufl.dx + ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
             compiled_riesz = dolfinx.fem.form(
                 riesz_form,
                 jit_options=options.get("jit_options", None),
@@ -167,7 +167,7 @@ class Function(dolfinx.fem.Function, FloatingType):
             M.destroy()
             return ret
         elif callable(riesz_representation):
-             return riesz_representation(value)
+            return riesz_representation(value)
         else:
             raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
 
