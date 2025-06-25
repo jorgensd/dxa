@@ -7,7 +7,6 @@ import numpy
 import ufl
 from pyadjoint.overloaded_type import create_overloaded_object
 from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
-
 try:
     import typing_extensions as typing
 except ModuleNotFoundError:
@@ -46,6 +45,11 @@ def assign(
     with stop_annotating():
         if isinstance(value, (numpy.inexact, float, int)):
             function.x.array[:] = value
+        elif isinstance(value, dolfinx.fem.Function):
+            assert value.function_space == function.function_space, (
+                "Function spaces of the value and function must match for assignment."
+            )
+            function.x.array[:] = value.x.array[:]
         else:
             raise ValueError(f"Unsupported value type for assignment: {type(value)})")
     if annotate:

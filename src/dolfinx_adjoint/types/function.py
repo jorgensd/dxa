@@ -133,38 +133,41 @@ class Function(dolfinx.fem.Function, FloatingType):
 
             u = ufl.TrialFunction(self.function_space)
             v = ufl.TestFunction(self.function_space)
-            mass_form = ufl.inner(u, v) * ufl.dx
-            compiled_mass = dolfinx.fem.form(
-                mass_form,
+            riesz_form = ufl.inner(u, v) * ufl.dx
+            compiled_riesz = dolfinx.fem.form(
+                riesz_form,
                 jit_options=options.get("jit_options", None),
                 form_compiler_options=options.get("form_compiler_options", None),
             )
             ret = dolfinx.fem.Function(self.function_space)
-            ret.name = "madness"
-            M = assemble_matrix(compiled_mass)
+            M = assemble_matrix(compiled_riesz)
             M.assemble()
             petsc_options = options.get("petsc_options", {})
             solve_linear_problem(M, ret.x, value, petsc_options=petsc_options)
             M.destroy()
             return ret
-        # elif riesz_representation == "L2":
-        #     ret = Function(self.function_space())
-        #     u = dolfin.TrialFunction(self.function_space())
-        #     v = dolfin.TestFunction(self.function_space())
-        #     M = dolfin.assemble(dolfin.inner(u, v) * dolfin.dx)
-        #     linalg_solve(M, ret.vector(), value)
-        #     return ret
-        # elif riesz_representation == "H1":
-        #     ret = Function(self.function_space())
-        #     u = dolfin.TrialFunction(self.function_space())
-        #     v = dolfin.TestFunction(self.function_space())
-        #     M = dolfin.assemble(
-        #         dolfin.inner(u, v) * dolfin.dx + dolfin.inner(
-        #             dolfin.grad(u), dolfin.grad(v)) * dolfin.dx)
-        #     linalg_solve(M, ret.vector(), value)
-        #     return ret
-        # elif callable(riesz_representation):
-        #     return riesz_representation(value)
+        elif riesz_representation == "H1":
+            from dolfinx.fem.petsc import assemble_matrix
+
+            from dolfinx_adjoint.petsc_utils import solve_linear_problem
+
+            u = ufl.TrialFunction(self.function_space)
+            v = ufl.TestFunction(self.function_space)
+            riesz_form = ufl.inner(u, v) * ufl.dx  + ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+            compiled_riesz = dolfinx.fem.form(
+                riesz_form,
+                jit_options=options.get("jit_options", None),
+                form_compiler_options=options.get("form_compiler_options", None),
+            )
+            ret = dolfinx.fem.Function(self.function_space)
+            M = assemble_matrix(compiled_riesz)
+            M.assemble()
+            petsc_options = options.get("petsc_options", {})
+            solve_linear_problem(M, ret.x, value, petsc_options=petsc_options)
+            M.destroy()
+            return ret
+        elif callable(riesz_representation):
+             return riesz_representation(value)
         else:
             raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
 
