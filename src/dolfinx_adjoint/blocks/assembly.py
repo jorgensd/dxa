@@ -77,6 +77,9 @@ class AssembleBlock(Block):
         for coefficient in self.form.coefficients():
             self.add_dependency(coefficient, no_duplicates=True)
 
+        # Set up cache for vectors that can be reused in adjoint action
+        self._cached_vectors: dict[int, dolfinx.la.Vector] = {}
+
     def __str__(self):
         return f"assemble({ufl2unicode(self.form)})"
 
@@ -125,12 +128,14 @@ class AssembleBlock(Block):
                 entity_maps=self._entity_maps,
             )
 
-            # NOTE: Cannot cache tensor, as FunctionSpace is not hashable.
-            dform_vector = assemble_compiled_form(compiled_adjoint)
-
+            if self._cached_vectors.get(id(space)) is None:
+                # Create a new vector for this space
+                self._cached_vectors[id(space)] = dolfinx.fem.create_vector(compiled_adjoint)
+            self._cached_vectors[id(space)].array[:] = 0.0
+            assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
             # Return a Vector scaled by the scalar `adj_input`
-            dform_vector.array[:] *= adj_input
-            return dform_vector, dform
+            self._cached_vectors[id(space)].array[:] *= adj_input
+            return self._cached_vectors[id(space)], dform
         # elif arity_form == 1:
         #     if dform is None:
         #         dc = dolfin.TrialFunction(space)

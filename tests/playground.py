@@ -54,8 +54,8 @@ def test_assign(mesh_var_name: str, request):
 
     control = pyadjoint.Control(v)
     Jh = pyadjoint.ReducedFunctional(J, control)
-    # tape = pyadjoint.get_working_tape()
-    # tape.visualise_dot("test2.dot")
+    tape = pyadjoint.get_working_tape()
+    tape.visualise_dot("test2.dot")
     # DEBUG: Look at tape
 
     # DEBUG: check differentiation
@@ -73,14 +73,14 @@ def test_assign(mesh_var_name: str, request):
     Hval = Jh.hessian(h)
     print(Hval.x.array)
     # DEBUG: Check the value of the functional
-    for x in [0.2, 0.4, -0.2, 0.5, -1.3]:
-        x_vec = Function(V)
-        x_vec.x.array[:] = x
-        # assert numpy.isclose(Jh(x_vec), p*(x - c) ** 2)
+    # for x in [0.2, 0.4, -0.2, 0.5, -1.3]:
+    #     x_vec = Function(V)
+    #     x_vec.x.array[:] = x
+    #     # assert numpy.isclose(Jh(x_vec), p*(x - c) ** 2)
 
     # DEBUG: Check minimzation call
     tol = 1e-9
-    opt = pyadjoint.minimize(Jh, method="CG", tol=tol, options={"maxiter": 200, "disp": True})
+    opt = pyadjoint.minimize(Jh, method="BFGS", tol=tol, options={"maxiter": 200, "disp": True})
     print(Jh(opt))
     print(opt.x.array)
 

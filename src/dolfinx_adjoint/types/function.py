@@ -2,6 +2,7 @@ from typing import Optional
 
 import dolfinx
 import numpy
+import ufl
 from pyadjoint.overloaded_type import (
     FloatingType,
     create_overloaded_object,
@@ -70,13 +71,32 @@ class Function(dolfinx.fem.Function, FloatingType):
         return checkpoint
 
     @no_annotations
-    def _ad_convert_type(self, value: dolfinx.la.Vector, options=None):
+    def _ad_convert_type(self, value: dolfinx.la.Vector, options: Optional[dict] = None) -> dolfinx.fem.Function:
         """Convert a vector to a Riesz representation of the function."""
 
         options = {} if options is None else options
         riesz_representation = options.get("riesz_representation", "l2")
         if riesz_representation == "l2":
             return create_overloaded_object(function_from_vector(self.function_space, value))
+        elif riesz_representation == "L2":
+            from dolfinx.fem.petsc import assemble_matrix
+            from dolfinx_adjoint.petsc_utils import solve_linear_problem
+
+            u = ufl.TrialFunction(self.function_space)
+            v = ufl.TestFunction(self.function_space)
+            mass_form = ufl.inner(u, v) * ufl.dx
+            compiled_mass = dolfinx.fem.form(
+                mass_form,
+                jit_options=options.get("jit_options", None),
+                form_compiler_options=options.get("form_compiler_options", None),
+            )
+            ret = dolfinx.fem.Function(self.function_space)
+            M = assemble_matrix(compiled_mass)
+            M.assemble()
+            petsc_options = options.get("petsc_options", {})
+            solve_linear_problem(M, ret.x, value, petsc_options=petsc_options)
+            M.destroy()
+            return ret
         # elif riesz_representation == "L2":
         #     ret = Function(self.function_space())
         #     u = dolfin.TrialFunction(self.function_space())

@@ -1,5 +1,4 @@
 import typing
-
 import dolfinx
 import numpy
 import numpy.typing as npt
@@ -34,3 +33,4 @@ def gather(vector: dolfinx.la.Vector) -> npt.NDArray[numpy.number]:
     comm = vector.index_map.comm
     data = comm.allgather(vector.array[:local_size])
     return numpy.hstack(data)
+
