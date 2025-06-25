@@ -14,14 +14,14 @@ on:
 
 jobs:
   test-code:
-    runs-on: ubuntu:22.04
+    runs-on: ubuntu:latest
     container: ghcr.io/fenics/dolfinx/dolfinx:nightly
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install package
         run: python3 -m pip install .[test]
 
       - name: Run tests
-        run: python3 -m pytest
+        run: python3 -m pytest -xvs

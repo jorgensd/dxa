@@ -22,13 +22,15 @@ jobs:
 
     steps:
       # This action sets the current path to the root of your github repo
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install code
         run: python3 -m pip install .[dev]
 
-      - name: Flake8 code
-        run: python3 -m flake8 -v
-
+      - name: ruff Python interface checks
+        run: |
+          ruff check .
+          ruff format --check .
+      
       - name: Mypy check
         run: python3 -m mypy -v
