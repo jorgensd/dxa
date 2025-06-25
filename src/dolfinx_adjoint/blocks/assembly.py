@@ -19,7 +19,8 @@ def assemble_compiled_form(
         form: Compiled form to assemble.
         tensor: Optional vector to which the assembled form will be added.
     Returns:
-        tensor: The assembled vector, which is either the input tensor or a new vector created from the form's function space(s).
+        tensor: The assembled vector, which is either the input tensor or a new vector
+            created from the form's function space(s).
     Raises:
         NotImplementedError: If the form's rank is not 0 or 1.
     """
@@ -99,8 +100,9 @@ class AssembleBlock(Block):
         - If `form` has arity 0, then :math:`\\frac{\\partial form}{\\partial c_{rep}}` is a 1-form
           and `adj_input` a float, we can simply use the `*` operator.
 
-        - If `form` has arity 1 then :math:`\\frac{\\partial form}{\\partial c_{rep}}` is a 2-form and we can symbolically
-          take its adjoint and then apply the action on `adj_input`, to finally assemble the result.
+        - If `form` has arity 1 then :math:`\\frac{\\partial form}{\\partial c_{rep}}` is a 2-form
+          and we can symbolically take its adjoint and then apply the action on `adj_input`, to finally
+          assemble the result.
 
         Args:
             adj_input: The input to the adjoint operation, typically a scalar or vector.
