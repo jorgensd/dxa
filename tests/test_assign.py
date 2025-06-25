@@ -19,12 +19,12 @@ def mesh_1D():
 
 @pytest.fixture(scope="module")
 def mesh_2D():
-    return dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
+    return dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 8, 7)
 
 
 @pytest.fixture(scope="module")
 def mesh_3D():
-    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 10, 10, 10)
+    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 50, 50, 50)
 
 
 @pytest.mark.parametrize("constant", [np.float64(0.2), float(-0.13), int(3)])
@@ -53,6 +53,10 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
 
     assert np.isclose(Jh(d), (float(d) - c) ** 4)
 
+    # Check derivative
+    dJ = Jh.derivative()
+    assert np.isclose(dJ, 4 * (float(d) - c) ** 3)
+
     # Perform taylor test
     du = pyadjoint.AdjFloat(0.1)
 
@@ -78,5 +82,4 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
             "riesz_representation": "l2",
         },
     )
-
     np.testing.assert_allclose(float(opt), float(c), atol=1e-5)
