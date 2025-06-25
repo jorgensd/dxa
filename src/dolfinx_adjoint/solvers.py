@@ -68,7 +68,6 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         """
         annotate = pyadjoint.annotate_tape({"annotate": annotate})
         if annotate:
-            # FIXME: Decide what objects should be passed in here.
             block = LinearProblemBlock(
                 self._lhs,
                 self._rhs,
