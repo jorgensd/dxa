@@ -22,7 +22,9 @@ class assign_kwargs(typing.TypedDict):
     """Whether to annotate the assignment in the adjoint tape."""
 
 
-def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: Unpack[assign_kwargs]):
+def assign(
+    value: typing.Union[numpy.inexact, float, int], function: dolfinx.fem.Function, **kwargs: Unpack[assign_kwargs]
+):
     """Assign a `value` to a :py:func:`dolfinx_adjoint.Function`.
 
     Args:
@@ -42,8 +44,14 @@ def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: Unpac
         tape.add_block(block)
 
     with stop_annotating():
-        if isinstance(value, numpy.inexact):
+        if isinstance(value, (numpy.inexact, float, int)):
             function.x.array[:] = value
-
+        elif isinstance(value, dolfinx.fem.Function):
+            assert value.function_space == function.function_space, (
+                "Function spaces of the value and function must match for assignment."
+            )
+            function.x.array[:] = value.x.array[:]
+        else:
+            raise ValueError(f"Unsupported value type for assignment: {type(value)})")
     if annotate:
         block.add_output(function.create_block_variable())

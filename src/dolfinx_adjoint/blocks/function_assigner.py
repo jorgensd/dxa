@@ -12,7 +12,12 @@ from dolfinx_adjoint.utils import function_from_vector
 
 
 class FunctionAssignBlock(Block):
-    def __init__(self, other: np.inexact, func: dolfinx.fem.Function, ad_block_tag: typing.Optional[str] = None):
+    def __init__(
+        self,
+        other: typing.Union[np.inexact, int, float],
+        func: dolfinx.fem.Function,
+        ad_block_tag: typing.Optional[str] = None,
+    ):
         super().__init__(ad_block_tag=ad_block_tag)
         self.other = None
         self.expr = None
@@ -130,7 +135,6 @@ class FunctionAssignBlock(Block):
     def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None):
         if self.expr is None:
             return tlm_inputs[0]
-
         expr = prepared
         dudm = dolfinx.fem.Function(block_variable.output.function_space)
         dudmi = dolfinx.fem.Function(block_variable.output.function_space)
@@ -161,7 +165,6 @@ class FunctionAssignBlock(Block):
     def prepare_recompute_component(self, inputs, relevant_outputs):
         if self.expr is None:
             return None
-        breakpoint()
         return self._replace_with_saved_output()
 
     def recompute_component(self, inputs, block_variable, idx, prepared):

@@ -1,7 +1,11 @@
-from typing import Optional
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore [no-redef]
 
 import dolfinx
 import numpy
+import ufl
 from pyadjoint.overloaded_type import (
     FloatingType,
     create_overloaded_object,
@@ -11,6 +15,7 @@ from pyadjoint.overloaded_type import (
 from pyadjoint.tape import no_annotations
 
 from dolfinx_adjoint import assign
+from dolfinx_adjoint.blocks.assembly import assemble_compiled_form
 from dolfinx_adjoint.utils import function_from_vector, gather
 
 
@@ -30,8 +35,8 @@ class Function(dolfinx.fem.Function, FloatingType):
     def __init__(
         self,
         V: dolfinx.fem.FunctionSpace,
-        x: Optional[dolfinx.la.Vector] = None,
-        name: Optional[str] = None,
+        x: typing.Optional[dolfinx.la.Vector] = None,
+        name: typing.Optional[str] = None,
         dtype: numpy.dtype = dolfinx.default_scalar_type,
         **kwargs,
     ):
@@ -56,11 +61,10 @@ class Function(dolfinx.fem.Function, FloatingType):
             annotate=kwargs.pop("annotate", True),
             **kwargs,
         )
-        dolfinx.fem.Function.__init__(self, V, x, name, dtype)
 
     @classmethod
     def _ad_init_object(cls, obj):
-        return cls(obj.function_space, obj.x)
+        return cls(obj.function_space, obj.x, obj.name)
 
     @no_annotations
     def _ad_create_checkpoint(self):
@@ -69,32 +73,101 @@ class Function(dolfinx.fem.Function, FloatingType):
     def _ad_restore_at_checkpoint(self, checkpoint):
         return checkpoint
 
-    @no_annotations
-    def _ad_convert_type(self, value: dolfinx.la.Vector, options=None):
-        """Convert a vector to a Riesz representation of the function."""
+    def _ad_dot(self, other: typing.Self, options: typing.Optional[dict] = None):
+        """Compute the inner product of the current function with ``other`` in the Riesz representation.
 
+        Args:
+            other: Function to compute the inner product with.
+        """
+        options = {} if options is None else options
+        riesz_representation = options.get("riesz_representation", "l2")
+        if riesz_representation == "l2":
+            return dolfinx.cpp.la.inner_product(self.x._cpp_object, other.x._cpp_object)
+        elif riesz_representation == "L2":
+            form_compiler_options = options.get("form_compiler_options", None)
+            jit_options = options.get("jit_options", None)
+            mass = ufl.inner(self, other) * ufl.dx
+            compiled_form = dolfinx.fem.form(
+                mass,
+                jit_options=jit_options,
+                form_compiler_options=form_compiler_options,
+            )
+            return assemble_compiled_form(compiled_form)
+        elif riesz_representation == "H1":
+            form_compiler_options = options.get("form_compiler_options", None)
+            jit_options = options.get("jit_options", None)
+            mass_and_stiffness = ufl.inner(self, other) * ufl.dx + ufl.inner(ufl.grad(self), ufl.grad(other)) * ufl.dx
+            compiled_form = dolfinx.fem.form(
+                mass_and_stiffness,
+                jit_options=jit_options,
+                form_compiler_options=form_compiler_options,
+            )
+            return assemble_compiled_form(compiled_form)
+        else:
+            raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
+
+    @no_annotations
+    def _ad_mul(self, other: typing.Union[int, float]) -> typing.Self:
+        """Multiplication of self with integer or floating value."""
+        r = get_overloaded_class(dolfinx.fem.Function)(self.function_space)
+        r.x.array[:] = self.x.array * other
+        return r
+
+    @no_annotations
+    def _ad_add(self, other: typing.Self) -> typing.Self:
+        r = get_overloaded_class(dolfinx.fem.Function)(self.function_space)
+        r.x.array[:] = self.x.array[:] + other.x.array[:]
+        return r
+
+    @no_annotations
+    def _ad_convert_type(self, value: dolfinx.la.Vector, options: typing.Optional[dict] = None) -> dolfinx.fem.Function:
+        """Convert a vector to a Riesz representation of the function."""
         options = {} if options is None else options
         riesz_representation = options.get("riesz_representation", "l2")
         if riesz_representation == "l2":
             return create_overloaded_object(function_from_vector(self.function_space, value))
-        # elif riesz_representation == "L2":
-        #     ret = Function(self.function_space())
-        #     u = dolfin.TrialFunction(self.function_space())
-        #     v = dolfin.TestFunction(self.function_space())
-        #     M = dolfin.assemble(dolfin.inner(u, v) * dolfin.dx)
-        #     linalg_solve(M, ret.vector(), value)
-        #     return ret
-        # elif riesz_representation == "H1":
-        #     ret = Function(self.function_space())
-        #     u = dolfin.TrialFunction(self.function_space())
-        #     v = dolfin.TestFunction(self.function_space())
-        #     M = dolfin.assemble(
-        #         dolfin.inner(u, v) * dolfin.dx + dolfin.inner(
-        #             dolfin.grad(u), dolfin.grad(v)) * dolfin.dx)
-        #     linalg_solve(M, ret.vector(), value)
-        #     return ret
-        # elif callable(riesz_representation):
-        #     return riesz_representation(value)
+        elif riesz_representation == "L2":
+            from dolfinx.fem.petsc import assemble_matrix
+
+            from dolfinx_adjoint.petsc_utils import solve_linear_problem
+
+            u = ufl.TrialFunction(self.function_space)
+            v = ufl.TestFunction(self.function_space)
+            riesz_form = ufl.inner(u, v) * ufl.dx
+            compiled_riesz = dolfinx.fem.form(
+                riesz_form,
+                jit_options=options.get("jit_options", None),
+                form_compiler_options=options.get("form_compiler_options", None),
+            )
+            ret = dolfinx.fem.Function(self.function_space)
+            M = assemble_matrix(compiled_riesz)
+            M.assemble()
+            petsc_options = options.get("petsc_options", {})
+            solve_linear_problem(M, ret.x, value, petsc_options=petsc_options)
+            M.destroy()
+            return ret
+        elif riesz_representation == "H1":
+            from dolfinx.fem.petsc import assemble_matrix
+
+            from dolfinx_adjoint.petsc_utils import solve_linear_problem
+
+            u = ufl.TrialFunction(self.function_space)
+            v = ufl.TestFunction(self.function_space)
+            riesz_form = ufl.inner(u, v) * ufl.dx + ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx
+            compiled_riesz = dolfinx.fem.form(
+                riesz_form,
+                jit_options=options.get("jit_options", None),
+                form_compiler_options=options.get("form_compiler_options", None),
+            )
+            ret = dolfinx.fem.Function(self.function_space)
+            M = assemble_matrix(compiled_riesz)
+            M.assemble()
+            petsc_options = options.get("petsc_options", {})
+            solve_linear_problem(M, ret.x, value, petsc_options=petsc_options)
+            M.destroy()
+            return ret
+        elif callable(riesz_representation):
+            return riesz_representation(value)
         else:
             raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
 
