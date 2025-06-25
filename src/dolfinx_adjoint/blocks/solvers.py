@@ -79,6 +79,15 @@ class LinearProblemBlock(pyadjoint.Block):
         self._petsc_options = petsc_options if petsc_options is not None else {}
         self._bcs = bcs if bcs is not None else []
 
+        # Solver for recomputing the linear problem
+        self._forward_solver =  dolfinx.fem.petsc.LinearProblem(
+            self._lhs, self._rhs, bcs=self._bcs, u=self._u, P=self._preconditioner, petsc_options=self._petsc_options,
+            form_compiler_options=self._form_compiler_options, jit_options=self._jit_options,
+            entity_maps=self._entity_maps
+        )
+
+
+
     # def _create_residual(self)-> ufl.Form:
     #     """Replace the linear problem with a residual of the output function(s)."""
 
@@ -112,13 +121,12 @@ class LinearProblemBlock(pyadjoint.Block):
         replace_map = self._create_replace_map(form)
         return ufl.replace(form, replace_map)
     
-    def prepare_recompute_component(self, inputs, relevant_outputs):
-        return self.create_forward_solver()
 
-    def create_forward_solver(self):
+    def prepare_recompute_component(self, inputs, relevant_outputs):
         """Prepare for recomputing the block with different control inputs."""
 
         # Create initial guess for the KSP solver
+        # Form independnet compilation would make it possible to use the same KSP for all re-evaluations.
         if isinstance(self._u, Function):
             initial_guess = dolfinx.fem.Function(self._u.function_space, name=self._u.name + "_initial_guess")
         else:
@@ -138,15 +146,32 @@ class LinearProblemBlock(pyadjoint.Block):
         # Loop through the dependencies of the lhs and rhs, check if they are in the respective form
         lhs = self._replace_coefficients_in_form(self._lhs)
         rhs = self._replace_coefficients_in_form(self._rhs)
-        print("in eval", rhs.coefficients()[0].x.array, id(rhs.coefficients()[0]))
-     
         preconditioner = self._replace_coefficients_in_form(self._preconditioner) if self._preconditioner is not None else None
-        self._forward_solver =  dolfinx.fem.petsc.LinearProblem(
-            lhs, rhs, bcs=bcs, u=initial_guess, P=preconditioner, petsc_options=self._petsc_options,
-            form_compiler_options=self._form_compiler_options, jit_options=self._jit_options,
-            entity_maps=self._entity_maps
-        )        
-    
+        compiled_lhs = dolfinx.fem.form(
+            lhs,
+            jit_options=self._jit_options,
+            form_compiler_options=self._form_compiler_options,
+            entity_maps=self._entity_maps,
+        )
+        compiled_rhs = dolfinx.fem.form(
+            rhs,
+            jit_options=self._jit_options,
+            form_compiler_options=self._form_compiler_options,
+            entity_maps=self._entity_maps,
+        )
+        compiled_preconditioner = dolfinx.fem.form(
+            preconditioner,
+            jit_options=self._jit_options,
+            form_compiler_options=self._form_compiler_options,
+            entity_maps=self._entity_maps,
+        ) if preconditioner is not None else None
+
+        # Replace the compiled forms with those with new coefficients.
+        self._forward_solver._a = compiled_lhs
+        self._forward_solver._L = compiled_rhs
+        self._forward_solver._P = compiled_preconditioner
+        self._forward_solver.bcs = bcs    
+        self._forward_solver._u = initial_guess
 
     def recompute_component(self, inputs, block_variable, idx, prepared) -> typing.Union[Function, typing.Iterable[Function]]:
         """Recompute the block with the prepared linear problem."""
