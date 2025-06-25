@@ -1,7 +1,5 @@
 from __future__ import annotations  # for Python<3.11
 
-from typing import Unpack
-
 import dolfinx
 import numpy
 import ufl
@@ -13,17 +11,11 @@ try:
 except ModuleNotFoundError:
     import typing  # type: ignore[no-redef]
 from .blocks.function_assigner import FunctionAssignBlock
-
-
-class assign_kwargs(typing.TypedDict):
-    ad_block_tag: typing.NotRequired[str]
-    """Tag for the block in the adjoint tape."""
-    annotate: typing.NotRequired[bool]
-    """Whether to annotate the assignment in the adjoint tape."""
+from .utils import ad_kwargs
 
 
 def assign(
-    value: typing.Union[numpy.inexact, float, int], function: dolfinx.fem.Function, **kwargs: Unpack[assign_kwargs]
+    value: typing.Union[numpy.inexact, float, int], function: dolfinx.fem.Function, **kwargs: typing.Unpack[ad_kwargs]
 ):
     """Assign a `value` to a :py:func:`dolfinx_adjoint.Function`.
 

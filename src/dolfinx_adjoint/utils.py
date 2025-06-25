@@ -1,4 +1,7 @@
-import typing
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore[no-redef]
 
 import dolfinx
 import numpy
@@ -34,3 +37,10 @@ def gather(vector: dolfinx.la.Vector) -> npt.NDArray[numpy.number]:
     comm = vector.index_map.comm
     data = comm.allgather(vector.array[:local_size])
     return numpy.hstack(data)
+
+
+class ad_kwargs(typing.TypedDict):
+    ad_block_tag: typing.NotRequired[str]
+    """Tag for the block in the adjoint tape."""
+    annotate: typing.NotRequired[bool]
+    """Whether to annotate the assignment in the adjoint tape."""
