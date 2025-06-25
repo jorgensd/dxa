@@ -23,7 +23,7 @@ def assemble_compiled_form(
 
     if form.rank == 1:
         tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
-        dolfinx.fem.assemble_vector(tensor.array, form)
+        dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
     elif form.rank == 0:
         local_val = dolfinx.fem.assemble_scalar(form)

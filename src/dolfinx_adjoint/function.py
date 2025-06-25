@@ -1,21 +1,24 @@
 from __future__ import annotations  # for Python<3.11
 
-from typing import TypedDict, Unpack
+from typing import Unpack
 
 import dolfinx
 import numpy
 import ufl
 from pyadjoint.overloaded_type import create_overloaded_object
 from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
-from typing_extensions import NotRequired, TypedDict
 
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore[no-redef]
 from .blocks.function_assigner import FunctionAssignBlock
 
 
-class assign_kwargs(TypedDict):
-    ad_block_tag: NotRequired[str]
+class assign_kwargs(typing.TypedDict):
+    ad_block_tag: typing.NotRequired[str]
     """Tag for the block in the adjoint tape."""
-    annotate: NotRequired[bool]
+    annotate: typing.NotRequired[bool]
     """Whether to annotate the assignment in the adjoint tape."""
 
 
