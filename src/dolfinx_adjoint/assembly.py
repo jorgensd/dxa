@@ -14,10 +14,10 @@ def assemble_scalar(form: ufl.Form, **kwargs):
     Args:
         form: Symbolic form (UFL) to assemble.
         kwargs: Keyword arguments to pass to the assembly routine.
-            Includes `"ad_block_tag"` to tag the block in the adjoint tape,
-            `"annotate"` to control whether the assembly is annotated in the adjoint tape,
-            `"jit_options"` for JIT compilation options,
-            and `"form_compiler_options"` for form compiler options and `"entity_map"` for assembling with Arguments
+            Includes ``"ad_block_tag"`` to tag the block in the adjoint tape,
+            ``"annotate"`` to control whether the assembly is annotated in the adjoint tape,
+            ``"jit_options"`` for JIT compilation options,
+            and ``"form_compiler_options"`` for form compiler options and ``"entity_map"`` for assembling with Arguments
             and coefficients form meshes that has some relation.
     """
     ad_block_tag = kwargs.pop("ad_block_tag", None)

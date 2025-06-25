@@ -18,7 +18,10 @@ def assemble_compiled_form(
     Args:
         form: Compiled form to assemble.
         tensor: Optional vector to which the assembled form will be added.
-
+    Returns:
+        tensor: The assembled vector, which is either the input tensor or a new vector created from the form's function space(s).
+    Raises:
+        NotImplementedError: If the form's rank is not 0 or 1.
     """
 
     if form.rank == 1:
@@ -36,6 +39,16 @@ def assemble_compiled_form(
 
 
 class AssembleBlock(Block):
+    """Block for assembling a symbolic UFL form into a tensor.
+
+    Args:
+        form: The UFL form to assemble.
+        ad_block_tag: Tag for the block in the adjoint tape.
+        jit_options: Dictionary of options for JIT compilation.
+        form_compiler_options: Dictionary of options for the form compiler.
+        entity_maps: Dictionary mapping meshes to entity maps for assembly.
+    """
+
     def __init__(
         self,
         form: ufl.Form,
@@ -68,21 +81,34 @@ class AssembleBlock(Block):
 
     def compute_action_adjoint(
         self,
-        adj_input,
-        arity_form,
+        adj_input: typing.Union[float, dolfinx.la.Vector],
+        arity_form: int,
         form: typing.Optional[ufl.Form] = None,
-        c_rep=None,
+        c_rep: typing.Optional[typing.Union[ufl.Coefficient, ufl.Constant]] = None,
         space: typing.Optional[dolfinx.fem.FunctionSpace] = None,
         dform: typing.Optional[dolfinx.fem.Form] = None,
     ):
         """This computes the action of the adjoint of the derivative of `form` wrt `c_rep` on `adj_input`.
-        In other words, it returns: `<(dform/dc_rep)*, adj_input>`
 
-        - If `form` has arity 0 => `dform/dc_rep` is a 1-form and `adj_input` a foat, we can simply use
-          the `*` operator.
+        In other words, it returns:
 
-        - If `form` has arity 1 => `dform/dc_rep` is a 2-form and we can symbolically take its adjoint
-          and then apply the action on `adj_input`, to finally assemble the result.
+        .. math::
+
+            \\left\\langle\\left(\\frac{\\partial form}{\\partial c_{rep}}\\right)^*, adj_{input} \\right\\rangle
+
+        - If `form` has arity 0, then :math:`\\frac{\\partial form}{\\partial c_{rep}}` is a 1-form
+          and `adj_input` a float, we can simply use the `*` operator.
+
+        - If `form` has arity 1 then :math:`\\frac{\\partial form}{\\partial c_{rep}}` is a 2-form and we can symbolically
+          take its adjoint and then apply the action on `adj_input`, to finally assemble the result.
+
+        Args:
+            adj_input: The input to the adjoint operation, typically a scalar or vector.
+            arity_form: The arity of the form, i.e., 0 for scalar, 1 for vector, 2 for matrix etc.
+            form: The UFL form to differentiate if `dform` is not provided.
+            c_rep: The coefficient or constant with respect to which the derivative is taken.
+            space: The function space associated with the `c_rep` to form an `ufl.Argument` in.
+            dform: Pre-computed derivative form, :math:`\\frac{\\partial form}{\\partial c_{rep}}`.
         """
         if arity_form == 0:
             assert arity_form == self.compiled_form.rank, "Inconsistent arity of input form and block form."
