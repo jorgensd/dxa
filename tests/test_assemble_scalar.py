@@ -50,28 +50,28 @@ def test_function_control(mesh_var_name: str, request):
     Jh = pyadjoint.ReducedFunctional(J, control)
     assert Jh(v) > 0
 
-    # # Perform taylor test
-    # du = Function(V)
-    # du.interpolate(lambda x: numpy.sin(x[0]))
+    # Perform taylor test
+    du = Function(V)
+    du.interpolate(lambda x: numpy.sin(x[0]))
 
-    # # Without gradient
-    # Jh(v)
-    # min_rate = pyadjoint.taylor_test(Jh, v, du, dJdm=0)
-    # assert numpy.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
+    # Without gradient
+    Jh(v)
+    min_rate = pyadjoint.taylor_test(Jh, v, du, dJdm=0)
+    assert numpy.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
 
-    # # With gradient
-    # Jh(v)
-    # min_rate = pyadjoint.taylor_test(Jh, v, du)
-    # assert numpy.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
+    # With gradient
+    Jh(v)
+    min_rate = pyadjoint.taylor_test(Jh, v, du)
+    assert numpy.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
 
-    # # Perform taylor test
-    # Jh(v)
-    # dJdm = Jh.derivative()._ad_dot(du)
-    # hessian = Jh.hessian(du)
-    # dHddu = hessian._ad_dot(du)
-    # min_rate = pyadjoint.taylor_test(Jh, v, du, dJdm=dJdm, Hm=dHddu)
-    # assert numpy.isclose(min_rate, 3.0, rtol=1e-3, atol=1e-3), f"Expected convergence rate close to 3.0, got {min_rate}"
-    # Jh(v)
+    # Perform taylor test
+    Jh(v)
+    dJdm = Jh.derivative()._ad_dot(du)
+    hessian = Jh.hessian(du)
+    dHddu = hessian._ad_dot(du)
+    min_rate = pyadjoint.taylor_test(Jh, v, du, dJdm=dJdm, Hm=dHddu)
+    assert numpy.isclose(min_rate, 3.0, rtol=1e-3, atol=1e-3), f"Expected convergence rate close to 3.0, got {min_rate}"
+    Jh(v)
 
     tol = 1e-9
     opt = pyadjoint.minimize(
