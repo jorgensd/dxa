@@ -60,9 +60,9 @@ class FunctionAssignBlock(Block):
                 # Adjoint of a broadcast is just a sum
                 if isinstance(adj_inputs[0], dolfinx.la.Vector):
                     vec = adj_inputs[0]
-                    local_size = vec.index_map.size_local * vec.block_size
-                    comm = vec.index_map.comm
-                    return comm.allreduce(sum(vec.array[:local_size]), op=MPI.SUM)
+                    one = dolfinx.la.vector(adj_inputs[0].index_map, adj_inputs[0].block_size, adj_inputs[0].array.dtype)
+                    one.array[:] = 1
+                    return dolfinx.cpp.la.inner_product(vec._cpp_object, one._cpp_object)
                 else:
                     try:
                         return adj_inputs[0].sum()
@@ -114,9 +114,12 @@ class FunctionAssignBlock(Block):
     def _adj_assign_constant(self, adj_output, constant_fs):
         r = dolfinx.fem.Function(constant_fs)
         shape = r.ufl_shape
+        raise NotImplementedError("Not implemented for constants.")
+
         if shape == () or shape[0] == 1:
             # Scalar Constant
-            r.vector()[:] = adj_output.vector().sum()
+            raise NotImplementedError("Not implemented for scalar constants yet.")
+            #r.vector()[:] = adj_output.vector().sum()
         # else:
         #     # We assume the shape of the constant == shape of the output function if not scalar.
         #     # This assumption is due to FEniCS not supporting products with non-scalar constants in assign.
