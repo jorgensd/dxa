@@ -72,15 +72,22 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     tape = pyadjoint.get_working_tape()
     d = Function(V)
     d.interpolate(lambda x: x[0])
-    print(d.x.array)
+    d.name = "t1"
+    print(f"Pre eval ({d.name})", d.x.array, id(d))
     print(Jh(d))
 
     e = Function(V)
+    e.name = "t2"
     e.interpolate(lambda x: np.sin(x[0]))
-    print(e.x.array)
-    print(Jh(e))
-    return
-    tape.visualise_dot("test_solver.dot")
+    print(f"Pre eval ({e.name})", e.x.array, id(e))
+
+
+    min_rate = pyadjoint.taylor_test(Jh, d, e, dJdm=0)
+    assert np.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
+
+    # print(Jh(e))
+    # return
+    # tape.visualise_dot("test_solver.dot")
     # assert np.isclose(Jh(d), (float(d) - c) ** 4)
 
     # # Check derivative

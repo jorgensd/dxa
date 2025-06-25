@@ -112,7 +112,10 @@ class LinearProblemBlock(pyadjoint.Block):
         replace_map = self._create_replace_map(form)
         return ufl.replace(form, replace_map)
     
-    def prepare_recompute_component(self, inputs, relevant_outputs) -> dolfinx.fem.petsc.LinearProblem:
+    def prepare_recompute_component(self, inputs, relevant_outputs):
+        return self.create_forward_solver()
+
+    def create_forward_solver(self):
         """Prepare for recomputing the block with different control inputs."""
 
         # Create initial guess for the KSP solver
@@ -135,18 +138,18 @@ class LinearProblemBlock(pyadjoint.Block):
         # Loop through the dependencies of the lhs and rhs, check if they are in the respective form
         lhs = self._replace_coefficients_in_form(self._lhs)
         rhs = self._replace_coefficients_in_form(self._rhs)
-        print("COEFF (control", rhs.coefficients()[0].x.array)
+        print("in eval", rhs.coefficients()[0].x.array, id(rhs.coefficients()[0]))
+     
         preconditioner = self._replace_coefficients_in_form(self._preconditioner) if self._preconditioner is not None else None
-        ksp = dolfinx.fem.petsc.LinearProblem(
+        self._forward_solver =  dolfinx.fem.petsc.LinearProblem(
             lhs, rhs, bcs=bcs, u=initial_guess, P=preconditioner, petsc_options=self._petsc_options,
             form_compiler_options=self._form_compiler_options, jit_options=self._jit_options,
             entity_maps=self._entity_maps
         )        
-        return ksp
+    
 
     def recompute_component(self, inputs, block_variable, idx, prepared) -> typing.Union[Function, typing.Iterable[Function]]:
         """Recompute the block with the prepared linear problem."""
-        ksp = prepared
-        return ksp.solve()
+        return self._forward_solver.solve()
 
 
