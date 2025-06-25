@@ -23,7 +23,7 @@ class assign_kwargs(typing.TypedDict):
 
 
 def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: Unpack[assign_kwargs]):
-    """Assign a `value` to a `dolfinx.fem.Function`.
+    """Assign a `value` to a :py:func:`dolfinx_adjoint.Function`.
 
     Args:
         value: The value to assign to the function.

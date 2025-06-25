@@ -5,3 +5,4 @@ The following is the API of the functions and classes provided by the `dolfinx_a
 
 .. automodule:: dolfinx_adjoint
     :members:
+    
