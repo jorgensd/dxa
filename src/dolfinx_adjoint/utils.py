@@ -23,9 +23,9 @@ def function_from_vector(
     :arg V: The function space
     :arg vector: The vector data.
     """
-    if not isinstance(vector, dolfinx.la.Vector):
-        vector = dolfinx.la.Vector(vector)
-    return dolfinx.fem.Function(V, x=vector)
+    ret = dolfinx.fem.Function(V, dtype=vector.array.dtype)
+    ret.x.array[:] = vector.array[:]
+    return ret
 
 
 def gather(vector: dolfinx.la.Vector) -> npt.NDArray[numpy.number]:

@@ -76,7 +76,6 @@ class AssembleBlock(Block):
         # self.add_dependency(mesh)
         for coefficient in self.form.coefficients():
             self.add_dependency(coefficient, no_duplicates=True)
-
         # Set up cache for vectors that can be reused in adjoint action
         self._cached_vectors: dict[int, dolfinx.la.Vector] = {}
 

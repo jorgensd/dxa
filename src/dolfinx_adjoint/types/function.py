@@ -61,11 +61,10 @@ class Function(dolfinx.fem.Function, FloatingType):
             annotate=kwargs.pop("annotate", True),
             **kwargs,
         )
-        dolfinx.fem.Function.__init__(self, V, x, name, dtype)
 
     @classmethod
     def _ad_init_object(cls, obj):
-        return cls(obj.function_space, obj.x)
+        return cls(obj.function_space, obj.x, obj.name)
 
     @no_annotations
     def _ad_create_checkpoint(self):
@@ -141,6 +140,7 @@ class Function(dolfinx.fem.Function, FloatingType):
                 form_compiler_options=options.get("form_compiler_options", None),
             )
             ret = dolfinx.fem.Function(self.function_space)
+            ret.name = "madness"
             M = assemble_matrix(compiled_mass)
             M.assemble()
             petsc_options = options.get("petsc_options", {})
