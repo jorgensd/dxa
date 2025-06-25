@@ -1,10 +1,15 @@
-from petsc4py import PETSc
-import dolfinx
 import typing
+
+from petsc4py import PETSc
+
+import dolfinx
 
 
 def solve_linear_problem(
-    A: "PETSc.Mat", x: dolfinx.la.Vector, b: dolfinx.la.Vector, petsc_options: typing.Optional[dict] = None
+    A: PETSc.Mat,
+    x: dolfinx.la.Vector,
+    b: dolfinx.la.Vector,
+    petsc_options: typing.Optional[dict] = None,  # type: ignore [name-defined]
 ):
     """Solve a linear problem :math:`Ax = b`.
 
@@ -15,11 +20,10 @@ def solve_linear_problem(
         petsc_options: Optional dictionary of PETSc options for the solver.
     """
 
-   
     petsc_options = {} if petsc_options is None else petsc_options
     error_if_not_converged = petsc_options.pop("ksp_error_if_not_converged", True)
     petsc_options["ksp_error_if_not_converged"] = error_if_not_converged
-    ksp = PETSc.KSP().create(A.comm)
+    ksp = PETSc.KSP().create(A.comm)  # type: ignore [attr-defined]
 
     ksp.setOperators(A)
 
@@ -28,7 +32,7 @@ def solve_linear_problem(
     ksp.setOptionsPrefix(problem_prefix)
 
     # Set PETSc options
-    opts = PETSc.Options()
+    opts = PETSc.Options()  # type: ignore [attr-defined]
     opts.prefixPush(problem_prefix)
     for k, v in petsc_options.items():
         opts[k] = v

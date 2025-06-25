@@ -1,4 +1,7 @@
-from typing import Optional
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore [no-redef]
 
 import dolfinx
 import numpy
@@ -12,6 +15,7 @@ from pyadjoint.overloaded_type import (
 from pyadjoint.tape import no_annotations
 
 from dolfinx_adjoint import assign
+from dolfinx_adjoint.blocks.assembly import assemble_compiled_form
 from dolfinx_adjoint.utils import function_from_vector, gather
 
 
@@ -31,8 +35,8 @@ class Function(dolfinx.fem.Function, FloatingType):
     def __init__(
         self,
         V: dolfinx.fem.FunctionSpace,
-        x: Optional[dolfinx.la.Vector] = None,
-        name: Optional[str] = None,
+        x: typing.Optional[dolfinx.la.Vector] = None,
+        name: typing.Optional[str] = None,
         dtype: numpy.dtype = dolfinx.default_scalar_type,
         **kwargs,
     ):
@@ -70,16 +74,62 @@ class Function(dolfinx.fem.Function, FloatingType):
     def _ad_restore_at_checkpoint(self, checkpoint):
         return checkpoint
 
-    @no_annotations
-    def _ad_convert_type(self, value: dolfinx.la.Vector, options: Optional[dict] = None) -> dolfinx.fem.Function:
-        """Convert a vector to a Riesz representation of the function."""
+    def _ad_dot(self, other: typing.Self, options: typing.Optional[dict] = None):
+        """Compute the inner product of the current function with ``other`` in the Riesz representation.
 
+        Args:
+            other: Function to compute the inner product with.
+        """
+        options = {} if options is None else options
+        riesz_representation = options.get("riesz_representation", "l2")
+        if riesz_representation == "l2":
+            return dolfinx.cpp.la.inner_product(self.x._cpp_object, other.x._cpp_object)
+        elif riesz_representation == "L2":
+            form_compiler_options = options.get("form_compiler_options", None)
+            jit_options = options.get("jit_options", None)
+            mass = ufl.inner(self, other) * ufl.dx
+            compiled_form = dolfinx.fem.form(
+                mass,
+                jit_options=jit_options,
+                form_compiler_options=form_compiler_options,
+            )
+            return assemble_compiled_form(compiled_form)
+        elif riesz_representation == "H1":
+            form_compiler_options = options.get("form_compiler_options", None)
+            jit_options = options.get("jit_options", None)
+            mass_and_stiffness = ufl.inner(self, other) * ufl.dx + ufl.inner(ufl.grad(self), ufl.grad(other)) * ufl.dx
+            compiled_form = dolfinx.fem.form(
+                mass_and_stiffness,
+                jit_options=jit_options,
+                form_compiler_options=form_compiler_options,
+            )
+            return assemble_compiled_form(compiled_form)
+        else:
+            raise NotImplementedError("Unknown Riesz representation %s" % riesz_representation)
+
+    @no_annotations
+    def _ad_mul(self, other: typing.Union[int, float]) -> typing.Self:
+        """Multiplication of self with integer or floating value."""
+        r = get_overloaded_class(dolfinx.fem.Function)(self.function_space)
+        r.x.array[:] = self.x.array * other
+        return r
+
+    @no_annotations
+    def _ad_add(self, other: typing.Self) -> typing.Self:
+        r = get_overloaded_class(dolfinx.fem.Function)(self.function_space)
+        r.x.array[:] = self.x.array[:] + other.x.array[:]
+        return r
+
+    @no_annotations
+    def _ad_convert_type(self, value: dolfinx.la.Vector, options: typing.Optional[dict] = None) -> dolfinx.fem.Function:
+        """Convert a vector to a Riesz representation of the function."""
         options = {} if options is None else options
         riesz_representation = options.get("riesz_representation", "l2")
         if riesz_representation == "l2":
             return create_overloaded_object(function_from_vector(self.function_space, value))
         elif riesz_representation == "L2":
             from dolfinx.fem.petsc import assemble_matrix
+
             from dolfinx_adjoint.petsc_utils import solve_linear_problem
 
             u = ufl.TrialFunction(self.function_space)
