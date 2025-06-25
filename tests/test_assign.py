@@ -55,7 +55,7 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
 
     # Check derivative
     dJ = Jh.derivative()
-    assert np.isclose(dJ, 4 * (float(d) - c)**3)
+    assert np.isclose(dJ, 4 * (float(d) - c) ** 3)
 
     # Perform taylor test
     du = pyadjoint.AdjFloat(0.1)
@@ -80,6 +80,6 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
         options={"maxiter": 200, "disp": True},
         derivative_options={
             "riesz_representation": "l2",
-        }
+        },
     )
     np.testing.assert_allclose(float(opt), float(c), atol=1e-5)

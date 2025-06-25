@@ -1,7 +1,5 @@
 import typing
 
-from mpi4py import MPI
-
 import dolfinx
 import numpy as np
 import ufl
@@ -60,7 +58,9 @@ class FunctionAssignBlock(Block):
                 # Adjoint of a broadcast is just a sum
                 if isinstance(adj_inputs[0], dolfinx.la.Vector):
                     vec = adj_inputs[0]
-                    one = dolfinx.la.vector(adj_inputs[0].index_map, adj_inputs[0].block_size, adj_inputs[0].array.dtype)
+                    one = dolfinx.la.vector(
+                        adj_inputs[0].index_map, adj_inputs[0].block_size, adj_inputs[0].array.dtype
+                    )
                     one.array[:] = 1
                     return dolfinx.cpp.la.inner_product(vec._cpp_object, one._cpp_object)
                 else:
@@ -119,7 +119,7 @@ class FunctionAssignBlock(Block):
         if shape == () or shape[0] == 1:
             # Scalar Constant
             raise NotImplementedError("Not implemented for scalar constants yet.")
-            #r.vector()[:] = adj_output.vector().sum()
+            # r.vector()[:] = adj_output.vector().sum()
         # else:
         #     # We assume the shape of the constant == shape of the output function if not scalar.
         #     # This assumption is due to FEniCS not supporting products with non-scalar constants in assign.
