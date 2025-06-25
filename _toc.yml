@@ -5,3 +5,4 @@ parts:
   - caption: Python API
     chapters:
     - file: "docs/api"
+    - file: "docs/api_blocks"

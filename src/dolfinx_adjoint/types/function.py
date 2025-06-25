@@ -15,6 +15,18 @@ from dolfinx_adjoint.utils import function_from_vector, gather
 
 
 class Function(dolfinx.fem.Function, FloatingType):
+    """A class overloading `dolfinx.fem.Function` to support it being used as a control variable
+    in the adjoint framework.
+
+    Args:
+        V: The function space of the function.
+        x: Optional vector to initialize the function with. If not provided, a zero vector is created.
+        name: Optional name for the function.
+        dtype: Data type of the function values, defaults to `dolfinx.default_scalar_type`.
+        **kwargs: Additional keyword arguments to pass to the `pyadjoint.overloaded_type.FloatingType` constructor.
+
+    """
+
     def __init__(
         self,
         V: dolfinx.fem.FunctionSpace,

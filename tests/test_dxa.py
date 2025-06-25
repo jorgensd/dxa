@@ -54,8 +54,8 @@ def test_assign(mesh_var_name: str, request):
 
     control = pyadjoint.Control(v)
     Jh = pyadjoint.ReducedFunctional(J, control)
-    tape = pyadjoint.get_working_tape()
-    tape.visualise_dot("test2.dot")
+    # tape = pyadjoint.get_working_tape()
+    # tape.visualise_dot("test2.dot")
     # DEBUG: Look at tape
 
     # DEBUG: check differentiation

@@ -1,4 +1,6 @@
-from typing import Optional, TypedDict
+from __future__ import annotations  # for Python<3.11
+
+from typing import Unpack
 
 import dolfinx
 import numpy
@@ -6,18 +8,22 @@ import ufl
 from pyadjoint.overloaded_type import create_overloaded_object
 from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
 
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore[no-redef]
 from .blocks.function_assigner import FunctionAssignBlock
 
 
-class assign_kwargs(TypedDict):
-    ad_block_tag: Optional[str]
+class assign_kwargs(typing.TypedDict):
+    ad_block_tag: typing.NotRequired[str]
     """Tag for the block in the adjoint tape."""
-    annotate: bool
+    annotate: typing.NotRequired[bool]
     """Whether to annotate the assignment in the adjoint tape."""
 
 
-def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: assign_kwargs):
-    """Assign a `value` to a `dolfinx.fem.Function`.
+def assign(value: numpy.inexact, function: dolfinx.fem.Function, **kwargs: Unpack[assign_kwargs]):
+    """Assign a `value` to a :py:func:`dolfinx_adjoint.Function`.
 
     Args:
         value: The value to assign to the function.

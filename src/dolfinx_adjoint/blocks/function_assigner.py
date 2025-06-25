@@ -3,6 +3,7 @@ import typing
 from mpi4py import MPI
 
 import dolfinx
+import numpy as np
 import ufl
 from pyadjoint import AdjFloat, Block, OverloadedType
 from ufl.formatting.ufl2unicode import ufl2unicode
@@ -11,7 +12,7 @@ from dolfinx_adjoint.utils import function_from_vector
 
 
 class FunctionAssignBlock(Block):
-    def __init__(self, other, func, ad_block_tag: typing.Optional[str] = None):
+    def __init__(self, other: np.inexact, func: dolfinx.fem.Function, ad_block_tag: typing.Optional[str] = None):
         super().__init__(ad_block_tag=ad_block_tag)
         self.other = None
         self.expr = None
