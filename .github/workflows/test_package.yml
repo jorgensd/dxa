@@ -14,7 +14,7 @@ on:
 
 jobs:
   test-code:
-    runs-on: ubuntu:latest
+    runs-on: ubuntu-latest
     container: ghcr.io/fenics/dolfinx/dolfinx:nightly
 
     steps:
