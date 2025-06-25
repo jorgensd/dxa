@@ -8,7 +8,11 @@ description = "Automatic differentation compatible with DOLFINx"
 authors = [{ name = "Jørgen S. Dokken", email = "dokken@simula.no" }]
 license = { file = "LICENSE" }
 readme = "README.md"
-dependencies = ["fenics-dolfinx>0.9.0", "pyadjoint-ad"]
+dependencies = [
+      "fenics-dolfinx>0.9.0",
+      "pyadjoint-ad",
+      "typing_extensions; python_version < '3.11'",
+]
 
 
 [project.optional-dependencies]
