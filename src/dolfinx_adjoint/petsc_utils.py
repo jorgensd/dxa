@@ -6,10 +6,10 @@ import dolfinx
 
 
 def solve_linear_problem(
-    A: PETSc.Mat,
+    A: PETSc.Mat,  # type: ignore [name-defined]
     x: dolfinx.la.Vector,
     b: dolfinx.la.Vector,
-    petsc_options: typing.Optional[dict] = None,  # type: ignore [name-defined]
+    petsc_options: typing.Optional[dict] = None,
 ):
     """Solve a linear problem :math:`Ax = b`.
 
