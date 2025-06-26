@@ -1,4 +1,4 @@
-# # Optional Control of the Poisson equation
+# # Optimal Control of the Poisson equation
 # *Section author: Jørgen S. Dokken [(dokken@simula.no)](mailto:dokken@simula.no)*.
 #
 # Original implementation in [dolfin-adjoint](https://github.com/dolfin-adjoint/dolfin-adjoint) was by Simon W. Funke.
