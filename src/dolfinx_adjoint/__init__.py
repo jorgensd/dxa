@@ -5,6 +5,7 @@ from importlib.metadata import metadata
 from .assembly import assemble_scalar
 from .function import assign
 from .types import Function
+from .solvers import LinearProblem
 
 meta = metadata("dolfinx_adjoint")
 __version__ = meta.get("Version")
@@ -13,9 +14,14 @@ __author__ = meta.get("Author")
 __email__ = meta.get("Author-email")
 __program_name__ = meta.get("Name")
 
+# Start annotation at import
+import pyadjoint as _pyad
+_pyad.set_working_tape(_pyad.Tape())
+_pyad.continue_annotation()
 
 __all__ = [
     "Function",
+    "LinearProblem",
     "assemble_scalar",
     "assign",
     "__version__",

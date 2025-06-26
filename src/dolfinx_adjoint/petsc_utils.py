@@ -10,6 +10,7 @@ def solve_linear_problem(
     x: dolfinx.la.Vector,
     b: dolfinx.la.Vector,
     petsc_options: typing.Optional[dict] = None,
+    P: typing.Optional[PETSc.Mat] = None,  # type: ignore [name-defined]
 ):
     """Solve a linear problem :math:`Ax = b`.
 
@@ -18,6 +19,7 @@ def solve_linear_problem(
         x: The solution vector
         b: The right-hand side vector
         petsc_options: Optional dictionary of PETSc options for the solver.
+        P: Optional preconditioner matrix. If not provided, no preconditioner is used.
     """
 
     petsc_options = {} if petsc_options is None else petsc_options
@@ -25,7 +27,7 @@ def solve_linear_problem(
     petsc_options["ksp_error_if_not_converged"] = error_if_not_converged
     ksp = PETSc.KSP().create(A.comm)  # type: ignore [attr-defined]
 
-    ksp.setOperators(A)
+    ksp.setOperators(A, P)
 
     # Give PETSc solver options a unique prefix
     problem_prefix = f"dolfinx_adjoint_linear_problem_{id(ksp)}"
