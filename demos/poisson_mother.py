@@ -78,17 +78,17 @@ del mesh
 # Next we use Pyvista to plot the mesh
 
 # +
-import pyvista
-pyvista.set_jupyter_backend("html")
-import sys, os
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
+# import pyvista
+# pyvista.set_jupyter_backend("html")
+# import sys, os
+# if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
+#     pyvista.start_xvfb(0.05)
 
-grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
-plotter = pyvista.Plotter()
-plotter.add_mesh(grid, show_edges=True, color="lightgrey")
-plotter.view_xy()
-plotter.show()
+# grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
+# plotter = pyvista.Plotter()
+# plotter.add_mesh(grid, show_edges=True, color="lightgrey")
+# plotter.view_xy()
+# plotter.show()
 # -
 
 # Then we define the discrete function spaces $V$ and $Q$ for the state and control variable, respectively
@@ -176,7 +176,7 @@ Jhat.derivative()
 tol = 1e-6
 opt = pyadjoint.minimize(
     Jhat,
-    method="BFGS",
+    method="Newton-CG",
     tol=tol,
     scale=1,
     options={"maxiter": 200, "disp": True},

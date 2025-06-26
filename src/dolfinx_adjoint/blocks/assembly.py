@@ -283,8 +283,10 @@ class AssembleBlock(Block):
             ddform = ufl.algorithms.expand_derivatives(ddform)
 
         if not ddform.empty():
+            # FIXME: COmpare ddform with legacy dolfin_adjoitn here, as this is DG-0, while hessian is in DG-0
             adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
             try:
+                breakpoint()
                 hessian_outputs += adj_action
             except TypeError:
                 hessian_outputs.array[:] += adj_action.array[:]
