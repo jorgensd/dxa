@@ -1,4 +1,7 @@
-import typing
+try:
+    import typing_extensions as typing
+except ModuleNotFoundError:
+    import typing  # type: ignore[no-redef]
 
 import dolfinx.fem.petsc
 import numpy as np
@@ -8,8 +11,8 @@ import ufl
 
 from dolfinx_adjoint.types import Function
 
-from .blocks.solvers import LinearProblemBlock
-from .utils import ad_kwargs
+from .blocks.solvers import LinearProblemBlock, solver_kwargs
+
 
 
 class LinearProblem(dolfinx.fem.petsc.LinearProblem):
@@ -30,10 +33,10 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
         entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
-        **kwargs: typing.Unpack[ad_kwargs],
+        **kwargs: typing.Unpack[solver_kwargs],
     ) -> None:
         self.ad_block_tag = kwargs.pop("ad_block_tag", None)
-
+        self._adjoint_options = kwargs.pop("adjoint_petsc_options", None)
         if u is None:
             try:
                 # Extract function space for unknown from the right hand
@@ -80,6 +83,7 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
                 jit_options=self._jit_options,
                 entity_maps=self._entity_maps,
                 ad_block_tag=self.ad_block_tag,
+                adjoint_petsc_options=self._adjoint_options,
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)

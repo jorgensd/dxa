@@ -68,7 +68,9 @@ class Function(dolfinx.fem.Function, FloatingType):
 
     @no_annotations
     def _ad_create_checkpoint(self):
-        return create_overloaded_object(self.copy())
+        checkpoint = create_overloaded_object(self.copy())
+        checkpoint.name = self.name + "_checkpoint"
+        return checkpoint
 
     def _ad_restore_at_checkpoint(self, checkpoint):
         return checkpoint

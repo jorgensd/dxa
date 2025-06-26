@@ -23,7 +23,7 @@ def mesh_2D():
 
 @pytest.fixture(scope="module")
 def mesh_3D():
-    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 5, 5, 5)
+    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 50, 50, 50)
 
 
 @pytest.mark.parametrize("constant", [np.float64(0.2)])  # , float(-0.13), int(3)])
@@ -38,6 +38,7 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     uh = Function(V, name="u_output")
 
     f = Function(V, name="control")
+    f.interpolate(lambda x: np.sin(x[0]))
     k = Function(V, name="kappa")
     k.x.array[:] = 1.0
     u = ufl.TrialFunction(V)
@@ -57,19 +58,31 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
         L,
         u=uh,
         bcs=[bc],
-        petsc_options={"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "ksp_error_if_not_converged": True},
-
+        petsc_options={
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+            "ksp_error_if_not_converged": True,
+        },
+        adjoint_petsc_options={
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+            "ksp_error_if_not_converged": True,
+            # "ksp_monitor": None,
+            # "ksp_view": None
+        },
     )
     problem.solve()
 
     d = pyadjoint.AdjFloat(constant)
     error = ufl.inner(uh - d, uh - d) * ufl.dx
     J = assemble_scalar(error)
-
+    print(J)
     control = pyadjoint.Control(f)
     Jh = pyadjoint.ReducedFunctional(J, control)
-
-    tape = pyadjoint.get_working_tape()
+    print(np.linalg.norm(Jh.derivative().x.array))
+    #tape = pyadjoint.get_working_tape()
     d = Function(V)
     d.interpolate(lambda x: x[0])
     d.name = "t1"
@@ -81,11 +94,15 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     e.interpolate(lambda x: np.sin(x[0]))
     print(f"Pre eval ({e.name})", e.x.array, id(e))
 
-
     min_rate = pyadjoint.taylor_test(Jh, d, e, dJdm=0)
     assert np.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
 
-    # print(Jh(e))
+    Jh.derivative()
+
+    Jh(d)
+    min_rate = pyadjoint.taylor_test(Jh, d, e)
+    assert np.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
+    print(Jh(e))
     # return
     # tape.visualise_dot("test_solver.dot")
     # assert np.isclose(Jh(d), (float(d) - c) ** 4)
@@ -100,12 +117,12 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     # # Without gradient
     # Jh(d)
     # min_rate = pyadjoint.taylor_test(Jh, d, du, dJdm=0)
-    # assert numpy.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
+    # assert np.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
 
     # # With gradient
     # Jh(d)
     # min_rate = pyadjoint.taylor_test(Jh, d, du)
-    # assert numpy.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
+    # assert np.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
 
     # Jh(d)
     # tol = 1e-9
