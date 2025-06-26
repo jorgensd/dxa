@@ -23,11 +23,11 @@ def mesh_2D():
 
 @pytest.fixture(scope="module")
 def mesh_3D():
-    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 50, 50, 50)
+    return dolfinx.mesh.create_unit_cube(MPI.COMM_WORLD, 11, 13, 12, cell_type=dolfinx.mesh.CellType.hexahedron)
 
 
-@pytest.mark.parametrize("constant", [np.float64(0.2)])  # , float(-0.13), int(3)])
-@pytest.mark.parametrize("mesh_var_name", ["mesh_1D"])  # , "mesh_2D", "mesh_3D"])
+@pytest.mark.parametrize("constant", [np.float64(0.2) , float(-0.13), int(3)])
+@pytest.mark.parametrize("mesh_var_name", ["mesh_1D" , "mesh_2D", "mesh_3D"])
 def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, np.floating]):
     pyadjoint.set_working_tape(pyadjoint.Tape())
     pyadjoint.continue_annotation()
@@ -59,15 +59,13 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
         u=uh,
         bcs=[bc],
         petsc_options={
-            "ksp_type": "preonly",
-            "pc_type": "lu",
-            "pc_factor_mat_solver_type": "mumps",
+            "ksp_type": "cg",
+            "pc_type": "jacobi",
             "ksp_error_if_not_converged": True,
         },
         adjoint_petsc_options={
-            "ksp_type": "preonly",
-            "pc_type": "lu",
-            "pc_factor_mat_solver_type": "mumps",
+            "ksp_type": "cg",
+            "pc_type": "jacobi",
             "ksp_error_if_not_converged": True,
             # "ksp_monitor": None,
             # "ksp_view": None
@@ -78,31 +76,27 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     d = pyadjoint.AdjFloat(constant)
     error = ufl.inner(uh - d, uh - d) * ufl.dx
     J = assemble_scalar(error)
-    print(J)
+
     control = pyadjoint.Control(f)
     Jh = pyadjoint.ReducedFunctional(J, control)
-    print(np.linalg.norm(Jh.derivative().x.array))
-    #tape = pyadjoint.get_working_tape()
     d = Function(V)
-    d.interpolate(lambda x: x[0])
-    d.name = "t1"
-    print(f"Pre eval ({d.name})", d.x.array, id(d))
-    print(Jh(d))
+    d.interpolate(lambda x: 10*x[0])
 
     e = Function(V)
-    e.name = "t2"
-    e.interpolate(lambda x: np.sin(x[0]))
-    print(f"Pre eval ({e.name})", e.x.array, id(e))
+    e.interpolate(lambda x: 10*np.sin(x[0]))
+    
+    Jh.derivative()
+
 
     min_rate = pyadjoint.taylor_test(Jh, d, e, dJdm=0)
     assert np.isclose(min_rate, 1.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 1.0, got {min_rate}"
 
-    Jh.derivative()
 
-    Jh(d)
+    Jh(e)
     min_rate = pyadjoint.taylor_test(Jh, d, e)
     assert np.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
-    print(Jh(e))
+
+
     # return
     # tape.visualise_dot("test_solver.dot")
     # assert np.isclose(Jh(d), (float(d) - c) ** 4)
