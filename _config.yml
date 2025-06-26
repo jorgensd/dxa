@@ -30,10 +30,13 @@ parse:
 sphinx:
   config:
     html_last_updated_fmt: "%b %d, %Y"
+    nb_custom_formats:
+      .py:
+        - jupytext.reads
+        - fmt: py
 
   extra_extensions:
   - 'sphinx.ext.autodoc'
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.viewcode'
-
 exclude_patterns: ["README.md",".pytest_cache/*"]

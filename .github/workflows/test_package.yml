@@ -28,4 +28,4 @@ jobs:
 
 
       - name: Run tests parallel
-        run: mpirun -n 3 python3 -m pytest -vs .
+        run: mpirun -n 3 python3 -m pytest -xvs tests/test_linear_solver.py tests/test_nonlinear_solver.py tests/test_adjoint.py tests/test_adjoint_operators.py tests/test_adjoint_operators_parallel.py
