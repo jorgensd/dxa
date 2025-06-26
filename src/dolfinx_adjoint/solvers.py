@@ -14,7 +14,6 @@ from dolfinx_adjoint.types import Function
 from .blocks.solvers import LinearProblemBlock, solver_kwargs
 
 
-
 class LinearProblem(dolfinx.fem.petsc.LinearProblem):
     """A linear problem that can be used with adjoint methods.
 

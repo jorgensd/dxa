@@ -50,6 +50,7 @@ def solve_linear_problem(
         del opts[k]
     ksp.solve(b.petsc_vec, x.petsc_vec)
     ksp.destroy()
+    x.scatter_forward()
 
 
 class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
@@ -60,13 +61,13 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
 
         # Assemble lhs
         self._A.zeroEntries()
-        dolfinx.fem.petsc.assemble_matrix(self._A, self._a, bcs=self.bcs)
+        dolfinx.fem.petsc.assemble_matrix(self._A, self._a, bcs=self.bcs) # type: ignore
         self._A.assemble()
 
         # Assemble preconditioner
         if self._P is not None:
             self._P.zeroEntries()
-            dolfinx.fem.petsc.assemble_matrix(self._P, self._preconditioner, bcs=self.bcs)
+            dolfinx.fem.petsc.assemble_matrix(self._P, self._preconditioner, bcs=self.bcs) # type: ignore
             self._P.assemble()
 
         if self.bcs is not None:
@@ -74,11 +75,11 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
                 for bc in self.bcs:
                     bc.set(self._b.array_w, alpha=0.0)
             except RuntimeError:
-                bcs0 = _bcs_by_block(_extract_spaces(self._L), self.bcs)  # type: ignore
+                bcs0 = dolfinx.fem.bcs.bcs_by_block(dolfinx.fem.forms.extract_spaces(self._L), self.bcs)  # type: ignore
                 dolfinx.fem.petsc.set_bc(self._b, bcs0, alpha=0.0)
 
         # Solve linear system and update ghost values in the solution
         self._solver.solve(self._b, self._x)
-        dolfinx.la.petsc._ghost_update(self._x, PETSc.InsertMode.INSERT, PETSc.ScatterMode.FORWARD)
+        dolfinx.la.petsc._ghost_update(self._x, PETSc.InsertMode.INSERT, PETSc.ScatterMode.FORWARD)# type: ignore
         dolfinx.fem.petsc.assign(self._x, self._u)
         return self._u

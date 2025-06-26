@@ -29,6 +29,7 @@ def assemble_compiled_form(
         tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
+        tensor.scatter_forward()
     elif form.rank == 0:
         local_val = dolfinx.fem.assemble_scalar(form)
         comm = form.mesh.comm
@@ -126,7 +127,6 @@ class AssembleBlock(Block):
                 form_compiler_options=self._form_compiler_options,
                 entity_maps=self._entity_maps,
             )
-
             if self._cached_vectors.get(id(space)) is None:
                 # Create a new vector for this space
                 self._cached_vectors[id(space)] = dolfinx.fem.create_vector(compiled_adjoint)
@@ -134,6 +134,7 @@ class AssembleBlock(Block):
             assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
             # Return a Vector scaled by the scalar `adj_input`
             self._cached_vectors[id(space)].array[:] *= adj_input
+            self._cached_vectors[id(space)].scatter_forward()
             return self._cached_vectors[id(space)], dform
         # elif arity_form == 1:
         #     if dform is None:
@@ -280,12 +281,13 @@ class AssembleBlock(Block):
 
         if not isinstance(ddform, float):
             ddform = ufl.algorithms.expand_derivatives(ddform)
-            if not ddform.empty():
-                adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
-                try:
-                    hessian_outputs += adj_action
-                except TypeError:
-                    hessian_outputs.array[:] += adj_action.array[:]
+
+        if not ddform.empty():
+            adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
+            try:
+                hessian_outputs += adj_action
+            except TypeError:
+                hessian_outputs.array[:] += adj_action.array[:]
         return hessian_outputs
 
     def prepare_recompute_component(self, inputs, relevant_outputs):
