@@ -24,3 +24,17 @@
 # a &\leq f \leq b &&
 # \end{align}
 # $$
+#
+# where $\Omega$ is the domain of interest, $u: \Omega \mapsto \mathbb{R}$ is the unknown temperature,
+# $\kappa\in\mathbb{R}$ is the thermal diffusivity, $f: \Omega \mapsto \mathbb{R}$ is the unknown contrl function acting as a source term,
+# $d:\Omega\mapsto \mathbb{R}$ is the desired temperature profile, and $\alpha\in[0,\infty)$ is a Tikhonov regularization parameter,
+# and $a,b\in\mathbb{R}$ are the lower and upper bounds on the control function $f$. 
+# Note that $f(x)>0$ corresponds to heating, while $f(x)<0$ corresponds to cooling.
+
+# It can be shown that this problem is well-posed and has a unique solution, see for instance Section 1.5 {cite}`Ulbrich2009` or {cite}`troltzsch2010optimal`.
+
+# ## References
+# ```{bibliography}
+# :filter: cited and ({"demos/poisson_mother"} >= docnames)
+# ```
+

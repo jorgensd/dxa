@@ -28,4 +28,4 @@ jobs:
 
 
       - name: Run tests parallel
-        run: mpirun -n 3 python3 -m pytest -xvs tests/test_linear_solver.py
+        run: mpirun -n 2 python3 -m pytest -xvs tests/

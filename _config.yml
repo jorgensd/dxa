@@ -21,6 +21,11 @@ html:
   use_issues_button: true
   use_repository_button: true
 
+
+bibtex_bibfiles:
+  - bibliography.bib
+
+
 parse:
   myst_enable_extensions:
     - amsmath
