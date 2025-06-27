@@ -61,7 +61,7 @@ def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
     """
     # Can just take the first dofmap here, since all dof maps have the same
     # index map in mixed-topology meshes
-    dofmap = L.function_spaces[0].dofmaps(0)
+    dofmap = L.function_spaces[0].dofmaps(0)  # type: ignore
     return _vector(dofmap.index_map, dofmap.index_map_bs, dtype=L.dtype)
 
 

@@ -76,8 +76,8 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         annotate = pyadjoint.annotate_tape({"annotate": annotate})
         if annotate:
             block = LinearProblemBlock(
-                self._lhs,
-                self._rhs,
+                self._lhs,  # type: ignore
+                self._rhs,  # type: ignore
                 bcs=self.bcs,
                 u=self.u,
                 P=self._preconditioner,

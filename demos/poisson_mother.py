@@ -80,7 +80,8 @@ def refinement_region(x, tol=1e-14):
 
 mesh.topology.create_connectivity(1, mesh.topology.dim)
 edges_to_refine = dolfinx.mesh.locate_entities(mesh, 1, refinement_region)
-refined_mesh, _, _ = dolfinx.mesh.refine(mesh, edges_to_refine)
+refined_mesh_data = dolfinx.mesh.refine(mesh, edges_to_refine)
+refined_mesh = refined_mesh_data[0]
 
 tdim = refined_mesh.topology.dim
 del mesh
@@ -126,7 +127,7 @@ uh = dolfinx_adjoint.Function(V, name="State")
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-kappa = dolfinx.fem.Constant(refined_mesh, 1.0)  # Thermal diffusivity
+kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
 F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
 a, L = ufl.system(F)
 
@@ -135,7 +136,8 @@ a, L = ufl.system(F)
 refined_mesh.topology.create_connectivity(tdim - 1, tdim)
 exterior_facets = dolfinx.mesh.exterior_facet_indices(refined_mesh.topology)
 exterior_dofs = dolfinx.fem.locate_dofs_topological(V, tdim - 1, exterior_facets)
-bc = dolfinx.fem.dirichletbc(0.0, exterior_dofs, V)
+zero = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(0.0))
+bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
 
 # Next, we define a `dolfinx_adjoint.LinearProblem` instance, which overloads
 # the `dolfinx.fem.petsc.LinearProblem` class.
@@ -165,7 +167,7 @@ d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 
 # The functional is written out in `ufl` and assembled with `dolfinx_adjoint.assemble_scalar`
 
-alpha = dolfinx.fem.Constant(refined_mesh, 1.0e-6)  # Tikhonov regularization parameter
+alpha = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
 alpha.name = "alpha"
 J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
 J = dolfinx_adjoint.assemble_scalar(J_symbolic)

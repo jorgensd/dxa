@@ -6,9 +6,9 @@ from importlib.metadata import metadata
 import pyadjoint as _pyad
 
 from .assembly import assemble_scalar
-from .function import assign
 from .solvers import LinearProblem
 from .types import Function
+from .types.function import assign
 
 meta = metadata("dolfinx_adjoint")
 __version__ = meta.get("Version")

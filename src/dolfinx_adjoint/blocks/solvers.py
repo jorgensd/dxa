@@ -55,7 +55,7 @@ class LinearProblemBlock(pyadjoint.Block):
                 # side of the equation.
                 self._u = Function(L.arguments()[0].ufl_function_space())  # type: ignore
             except AttributeError:
-                self._u = [Function(Li.arguments()[0].ufl_function_space()) for Li in L]
+                self._u = [Function(Li.arguments()[0].ufl_function_space()) for Li in L]  # type: ignore[union-attr]
         else:
             self._u = [pyadjoint.create_overloaded_object(ui) for ui in u]
 
@@ -253,7 +253,7 @@ class LinearProblemBlock(pyadjoint.Block):
         """
         # NOTE: Should probably be possible to compile this form once.
         replacement_functions = self.get_outputs()
-        F_form: typing.Union[list[list[ufl.Form]], ufl.Form] = []
+        F_form: typing.Union[ufl.Form, list[ufl.Form]] = []
         if isinstance(self._u, Function):
             assert len(replacement_functions) == 1, (
                 f"Expected a single output function, got {len(replacement_functions)}"
@@ -265,16 +265,19 @@ class LinearProblemBlock(pyadjoint.Block):
                 f"Expected {len(self._u)} output functions, got {len(replacement_functions)}"
             )
             for i in range(len(self._u)):
-                F_form.append([])
+                assert isinstance(F_form, list)
+                res_i = ufl.ZeroBaseForm((self._u[i],))
                 for j in range(len(self._u)):
-                    F_form[-1] += ufl.action(self._lhs[i][j], replacement_functions[j].saved_output)
-                F_form[-1] -= self._rhs[i]
-
+                    res_i += ufl.action(self._lhs[i][j], replacement_functions[j].saved_output)  # type: ignore[index]
+                res_i -= self._rhs[i]  # type: ignore[index]
+                F_form.append(res_i)
         # NOTE: Will fail for blocked systems atm
+        assert isinstance(F_form, ufl.Form)
         replacement_map = self._create_replace_map(F_form)
         if isinstance(self._u, Function):
             F_form = ufl.replace(F_form, replacement_map)
         else:
+            assert isinstance(F_form, list)
             for j in range(len(F_form)):
                 F_form[j] = ufl.replace(F_form[j], replacement_map)
         return F_form
@@ -288,6 +291,7 @@ class LinearProblemBlock(pyadjoint.Block):
             assert isinstance(F_form, ufl.Form)
             dFdu = ufl.derivative(F_form, outputs[0], ufl.TrialFunction(outputs[0].function_space))
         else:
+            assert isinstance(F_form, list)
             dFdu = []
             for i in range(len(outputs)):
                 dFdu.append([])
@@ -295,7 +299,9 @@ class LinearProblemBlock(pyadjoint.Block):
                     dFdu[-1].append(ufl.derivative(F_form[i], outputs[j], ufl.TrialFunction(outputs[j].function_space)))
         return dFdu
 
-    def prepare_evaluate_tlm(self, inputs, tlm_inputs, relevant_outputs) -> tuple[ufl.Form, dolfinx.fem.Form]:
+    def prepare_evaluate_tlm(
+        self, inputs, tlm_inputs, relevant_outputs
+    ) -> tuple[typing.Union[list[ufl.Form], ufl.Form], dolfinx.fem.Form]:
         F_form = self._compute_residual()
         dFdu_compiled = dolfinx.fem.form(
             self._compute_residual_derivative(),
@@ -322,7 +328,7 @@ class LinearProblemBlock(pyadjoint.Block):
         bcs = []
         for bc in self._bcs:
             bcs.append(bc)
-        dFdm = 0.0
+        dFdm = ufl.ZeroBaseForm((ufl.TestFunction(V),))
         for block_variable in self.get_dependencies():
             tlm_value = block_variable.tlm_value
             # c = block_variable.output
