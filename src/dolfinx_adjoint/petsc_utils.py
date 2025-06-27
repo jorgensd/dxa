@@ -67,10 +67,10 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
         self._A.assemble()
 
         # Assemble preconditioner
-        if self._P is not None:
-            self._P.zeroEntries()
-            dolfinx.fem.petsc.assemble_matrix(self._P, self._preconditioner, bcs=self.bcs)  # type: ignore
-            self._P.assemble()
+        if self._P_mat is not None:
+            self._P_mat.zeroEntries()
+            dolfinx.fem.petsc.assemble_matrix(self._P_mat, self._preconditioner, bcs=self.bcs)  # type: ignore
+            self._P_mat.assemble()
 
         if self.bcs is not None:
             try:
