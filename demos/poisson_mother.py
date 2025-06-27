@@ -87,8 +87,7 @@ def refinement_region(x, tol=1e-14):
 mesh.topology.create_connectivity(1, mesh.topology.dim)
 edges_to_refine = dolfinx.mesh.locate_entities(mesh, 1, refinement_region)
 refined_mesh_data = dolfinx.mesh.refine(mesh, edges_to_refine)
-#refined_mesh = refined_mesh_data[0]
-refined_mesh = mesh
+refined_mesh = refined_mesh_data[0]
 tdim = refined_mesh.topology.dim
 del mesh
 # -
