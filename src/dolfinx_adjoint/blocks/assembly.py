@@ -10,6 +10,60 @@ from pyadjoint import Block, create_overloaded_object
 from ufl.formatting.ufl2unicode import ufl2unicode
 
 
+
+class _SpecialVector(dolfinx.la.Vector):
+    """Workaround adding __iadd__ to `dolfinx.la.Vector`."""
+    def __iadd__(self, other):
+        self.array[:] += other.array[:]
+        return self    
+
+def vector(map, bs=1, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
+    """Create a distributed vector.
+
+    Args:
+        map: Index map the describes the size and distribution of the
+            vector.
+        bs: Block size.
+        dtype: The scalar type.
+
+    Returns:
+        A distributed vector.
+    """
+    if np.issubdtype(dtype, np.float32):
+        vtype = dolfinx.cpp.la.Vector_float32
+    elif np.issubdtype(dtype, np.float64):
+        vtype = dolfinx.cpp.la.Vector_float64
+    elif np.issubdtype(dtype, np.complex64):
+        vtype = dolfinx.cpp.la.Vector_complex64
+    elif np.issubdtype(dtype, np.complex128):
+        vtype = dolfinx.cpp.la.Vector_complex128
+    elif np.issubdtype(dtype, np.int8):
+        vtype = dolfinx.cpp.la.Vector_int8
+    elif np.issubdtype(dtype, np.int32):
+        vtype = dolfinx.cpp.la.Vector_int32
+    elif np.issubdtype(dtype, np.int64):
+        vtype = dolfinx.cpp.la.Vector_int64
+    else:
+        raise NotImplementedError(f"Type {dtype} not supported.")
+
+    return _SpecialVector(vtype(map, bs))
+
+def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
+    """Create a Vector that is compatible with a given linear form.
+
+    Args:
+        L: A linear form.
+
+    Returns:
+        A vector that the form can be assembled into.
+    """
+    # Can just take the first dofmap here, since all dof maps have the same
+    # index map in mixed-topology meshes
+    dofmap = L.function_spaces[0].dofmaps(0)
+    return vector(dofmap.index_map, dofmap.index_map_bs, dtype=L.dtype)
+
+
+
 def assemble_compiled_form(
     form: dolfinx.fem.Form, tensor: typing.Optional[dolfinx.la.Vector] = None
 ) -> dolfinx.la.Vector:
@@ -78,7 +132,7 @@ class AssembleBlock(Block):
         for coefficient in self.form.coefficients():
             self.add_dependency(coefficient, no_duplicates=True)
         # Set up cache for vectors that can be reused in adjoint action
-        self._cached_vectors: dict[int, dolfinx.la.Vector] = {}
+        self._cached_vectors: dict[int, _SpecialVector] = {}
 
     def __str__(self):
         return f"assemble({ufl2unicode(self.form)})"
@@ -127,9 +181,10 @@ class AssembleBlock(Block):
                 form_compiler_options=self._form_compiler_options,
                 entity_maps=self._entity_maps,
             )
+
             if self._cached_vectors.get(id(space)) is None:
                 # Create a new vector for this space
-                self._cached_vectors[id(space)] = dolfinx.fem.create_vector(compiled_adjoint)
+                self._cached_vectors[id(space)] = _create_vector(compiled_adjoint)
             self._cached_vectors[id(space)].array[:] = 0.0
             assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
             # Return a Vector scaled by the scalar `adj_input`
