@@ -26,9 +26,7 @@ def mesh_3D():
 
 @pytest.mark.parametrize("mesh_var_name", ["mesh_1D", "mesh_2D", "mesh_3D"])
 def test_function_control(mesh_var_name: str, request):
-    pyadjoint.set_working_tape(pyadjoint.Tape())
-    pyadjoint.continue_annotation()
-
+    pyadjoint.get_working_tape().clear_tape()
     mesh = request.getfixturevalue(mesh_var_name)
 
     V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))

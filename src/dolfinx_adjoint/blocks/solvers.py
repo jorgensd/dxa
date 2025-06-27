@@ -33,8 +33,10 @@ class LinearProblemBlock(pyadjoint.Block):
 
     This class extends the `dolfinx.fem.petsc.LinearProblem` to support adjoint methods.
     """
-    _adjoint_solutions: typing.Union[Function , typing.Iterable[Function]]
-    _second_adjoint_solutions: typing.Union[Function , typing.Iterable[Function]]
+
+    _adjoint_solutions: typing.Union[Function, typing.Iterable[Function]]
+    _second_adjoint_solutions: typing.Union[Function, typing.Iterable[Function]]
+
     def __init__(
         self,
         a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
@@ -72,9 +74,9 @@ class LinearProblemBlock(pyadjoint.Block):
 
         # NOTE: Add mesh and constants as dependencies later on
         try:
-            for c in self._lhs.coefficients(): # type: ignore
+            for c in self._lhs.coefficients():  # type: ignore
                 self.add_dependency(c, no_duplicates=True)
-            for c in self._rhs.coefficients(): # type: ignore
+            for c in self._rhs.coefficients():  # type: ignore
                 self.add_dependency(c, no_duplicates=True)
         except AttributeError:
             raise NotImplementedError("Blocked systems not implemented yet.")
@@ -269,7 +271,7 @@ class LinearProblemBlock(pyadjoint.Block):
             assert len(replacement_functions) == 1, (
                 f"Expected a single output function, got {len(replacement_functions)}"
             )
-            F_form = ufl.action(self._lhs, replacement_functions[0].saved_output) - self._rhs 
+            F_form = ufl.action(self._lhs, replacement_functions[0].saved_output) - self._rhs
         else:
             # Blocked formulation (assuming no mixed function-space)
             assert len(self._u) == len(replacement_functions), (
