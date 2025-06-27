@@ -9,6 +9,7 @@ on:
     # The CI is executed on every pull request to the main branch
     branches:
       - main
+  workflow_call:
 
   schedule:
     # The CI is executed every day at 8am
@@ -25,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install code
-        run: python3 -m pip install .[dev]
+        run: python3 -m pip install .[dev] -U
 
       - name: ruff Python interface checks
         run: |
@@ -33,4 +34,4 @@ jobs:
           ruff format --check .
       
       - name: Mypy check
-        run: python3 -m mypy -v
+        run: python3 -m mypy .

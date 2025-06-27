@@ -10,9 +10,64 @@ from pyadjoint import Block, create_overloaded_object
 from ufl.formatting.ufl2unicode import ufl2unicode
 
 
+class _SpecialVector(dolfinx.la.Vector):
+    """Workaround adding __iadd__ to `dolfinx.la.Vector`."""
+
+    def __iadd__(self, other):
+        self.array[:] += other.array[:]
+        return self
+
+
+def _vector(map, bs=1, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
+    """Create a distributed vector.
+
+    Args:
+        map: Index map the describes the size and distribution of the
+            vector.
+        bs: Block size.
+        dtype: The scalar type.
+
+    Returns:
+        A distributed vector.
+    """
+    if np.issubdtype(dtype, np.float32):
+        vtype = dolfinx.cpp.la.Vector_float32
+    elif np.issubdtype(dtype, np.float64):
+        vtype = dolfinx.cpp.la.Vector_float64
+    elif np.issubdtype(dtype, np.complex64):
+        vtype = dolfinx.cpp.la.Vector_complex64
+    elif np.issubdtype(dtype, np.complex128):
+        vtype = dolfinx.cpp.la.Vector_complex128
+    elif np.issubdtype(dtype, np.int8):
+        vtype = dolfinx.cpp.la.Vector_int8
+    elif np.issubdtype(dtype, np.int32):
+        vtype = dolfinx.cpp.la.Vector_int32
+    elif np.issubdtype(dtype, np.int64):
+        vtype = dolfinx.cpp.la.Vector_int64
+    else:
+        raise NotImplementedError(f"Type {dtype} not supported.")
+
+    return _SpecialVector(vtype(map, bs))
+
+
+def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
+    """Create a Vector that is compatible with a given linear form.
+
+    Args:
+        L: A linear form.
+
+    Returns:
+        A vector that the form can be assembled into.
+    """
+    # Can just take the first dofmap here, since all dof maps have the same
+    # index map in mixed-topology meshes
+    dofmap = L.function_spaces[0].dofmaps(0)  # type: ignore
+    return _vector(dofmap.index_map, dofmap.index_map_bs, dtype=L.dtype)
+
+
 def assemble_compiled_form(
-    form: dolfinx.fem.Form, tensor: typing.Optional[dolfinx.la.Vector] = None
-) -> dolfinx.la.Vector:
+    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]] = None
+) -> typing.Union[dolfinx.la.Vector, _SpecialVector, float]:
     """Assemble a compiled form and optionally apply Dirichlet boundary condition.
 
     Args:
@@ -27,8 +82,10 @@ def assemble_compiled_form(
 
     if form.rank == 1:
         tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
+        assert isinstance(tensor, dolfinx.la.Vector)
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
+        tensor.scatter_forward()
     elif form.rank == 0:
         local_val = dolfinx.fem.assemble_scalar(form)
         comm = form.mesh.comm
@@ -77,7 +134,7 @@ class AssembleBlock(Block):
         for coefficient in self.form.coefficients():
             self.add_dependency(coefficient, no_duplicates=True)
         # Set up cache for vectors that can be reused in adjoint action
-        self._cached_vectors: dict[int, dolfinx.la.Vector] = {}
+        # self._cached_vectors: dict[int, _SpecialVector] = {}
 
     def __str__(self):
         return f"assemble({ufl2unicode(self.form)})"
@@ -117,24 +174,39 @@ class AssembleBlock(Block):
         if arity_form == 0:
             assert arity_form == self.compiled_form.rank, "Inconsistent arity of input form and block form."
             if dform is None:
+                assert space is not None
                 dc = ufl.TestFunction(space)
                 dform = ufl.derivative(form, c_rep, dc)
 
+            assert isinstance(dform, ufl.Form), "dform must be a UFL form."
             compiled_adjoint = dolfinx.fem.form(
                 dform,
                 jit_options=self._jit_options,
                 form_compiler_options=self._form_compiler_options,
                 entity_maps=self._entity_maps,
             )
+            if space is None:
+                # If space is not supplied infer it from the form
+                assert len(dform.arguments()) == 1
+                space = dform.arguments()[0].ufl_function_space()
+                # self._cached_vectors[id(space)] = _create_vector(compiled_adjoint)
+            vector = _create_vector(compiled_adjoint)
+            vector.array[:] = 0.0
+            # elif self._cached_vectors.get(id(space)) is None:
+            # Create a new vector for this space
+            # self._cached_vectors[id(space)] = _create_vector(compiled_adjoint)
+            # self._cached_vectors[id(space)].array[:] = 0.0
+            # assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
+            assemble_compiled_form(compiled_adjoint, vector)
+            # return a vector scalbed by the scalar `adj_input`
+            vector.array[:] *= adj_input
+            vector.scatter_forward()
 
-            if self._cached_vectors.get(id(space)) is None:
-                # Create a new vector for this space
-                self._cached_vectors[id(space)] = dolfinx.fem.create_vector(compiled_adjoint)
-            self._cached_vectors[id(space)].array[:] = 0.0
-            assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
+            return vector, dform
             # Return a Vector scaled by the scalar `adj_input`
-            self._cached_vectors[id(space)].array[:] *= adj_input
-            return self._cached_vectors[id(space)], dform
+            # self._cached_vectors[id(space)].array[:] *= adj_input
+            # self._cached_vectors[id(space)].scatter_forward()
+            # return self._cached_vectors[id(space)], dform
         # elif arity_form == 1:
         #     if dform is None:
         #         dc = dolfin.TrialFunction(space)
@@ -261,8 +333,11 @@ class AssembleBlock(Block):
             space = c1._ad_function_space()
         else:
             return None
-
         hessian_outputs, dform = self.compute_action_adjoint(hessian_input, arity_form, form, c1_rep, space)
+
+        # print("Dolfinx in", c1_rep.function_space, hessian_input, adj_input)
+
+        # print("DOLFINx hessian outputs", np.linalg.norm(hessian_outputs.array))
 
         ddform = 0
         for other_idx, bv in relevant_dependencies:
@@ -277,15 +352,20 @@ class AssembleBlock(Block):
                 ddform += ufl.derivative(dform, X, tlm_input)
             else:
                 ddform += ufl.derivative(dform, c2_rep, tlm_input)
-
         if not isinstance(ddform, float):
             ddform = ufl.algorithms.expand_derivatives(ddform)
-            if not ddform.empty():
-                adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
-                try:
-                    hessian_outputs += adj_action
-                except TypeError:
-                    hessian_outputs.array[:] += adj_action.array[:]
+
+        if not ddform.empty():
+            # FIXME: COmpare ddform with legacy dolfin_adjoitn here, as this is DG-0, while hessian is in DG-0
+            adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
+            # print("ADJ ACTION", np.linalg.norm(adj_action.array[:]))
+            try:
+                hessian_outputs += adj_action
+            except TypeError:
+                hessian_outputs.array[:] += adj_action.array[:]
+        # print("DOLFINx in", hessian_inputs, adj_inputs)
+        # print("DOLFINx", np.linalg.norm(hessian_outputs.array))
+
         return hessian_outputs
 
     def prepare_recompute_component(self, inputs, relevant_outputs):

@@ -30,9 +30,7 @@ def mesh_3D():
 @pytest.mark.parametrize("constant", [np.float64(0.2), float(-0.13), int(3)])
 @pytest.mark.parametrize("mesh_var_name", ["mesh_1D", "mesh_2D", "mesh_3D"])
 def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[float, int, np.floating]):
-    pyadjoint.set_working_tape(pyadjoint.Tape())
-    pyadjoint.continue_annotation()
-
+    pyadjoint.get_working_tape().clear_tape()
     mesh = request.getfixturevalue(mesh_var_name)
 
     V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))

@@ -21,6 +21,11 @@ html:
   use_issues_button: true
   use_repository_button: true
 
+
+bibtex_bibfiles:
+  - bibliography.bib
+
+
 parse:
   myst_enable_extensions:
     - amsmath
@@ -30,10 +35,13 @@ parse:
 sphinx:
   config:
     html_last_updated_fmt: "%b %d, %Y"
+    nb_custom_formats:
+      .py:
+        - jupytext.reads
+        - fmt: py
 
   extra_extensions:
   - 'sphinx.ext.autodoc'
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.viewcode'
-
 exclude_patterns: ["README.md",".pytest_cache/*"]

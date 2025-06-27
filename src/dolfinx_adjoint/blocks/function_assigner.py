@@ -173,7 +173,9 @@ class FunctionAssignBlock(Block):
     def recompute_component(self, inputs, block_variable, idx, prepared):
         if self.expr is None:
             prepared = inputs[0]
-        output = dolfinx.fem.Function(block_variable.output.function_space)
+        output = dolfinx.fem.Function(
+            block_variable.output.function_space, name="f{block_variable.output.name}_AssignBlockRecompute"
+        )
         try:
             if output.function_space == prepared.function_space:
                 output.x.array[:] = prepared.x.array[:]
