@@ -66,8 +66,8 @@ def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
 
 
 def assemble_compiled_form(
-    form: dolfinx.fem.Form, tensor: typing.Optional[dolfinx.la.Vector] = None
-) -> dolfinx.la.Vector:
+    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]] = None
+) -> typing.Union[dolfinx.la.Vector, _SpecialVector, float]:
     """Assemble a compiled form and optionally apply Dirichlet boundary condition.
 
     Args:
@@ -82,6 +82,7 @@ def assemble_compiled_form(
 
     if form.rank == 1:
         tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
+        assert isinstance(tensor, dolfinx.la.Vector)
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
         tensor.scatter_forward()
@@ -177,6 +178,7 @@ class AssembleBlock(Block):
                 dc = ufl.TestFunction(space)
                 dform = ufl.derivative(form, c_rep, dc)
 
+            assert isinstance(dform, ufl.Form), "dform must be a UFL form."
             compiled_adjoint = dolfinx.fem.form(
                 dform,
                 jit_options=self._jit_options,

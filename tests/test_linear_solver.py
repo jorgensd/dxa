@@ -48,7 +48,8 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
     boundary_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
     boundary_dofs = dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim - 1, boundary_facets)
-    bc = dolfinx.fem.dirichletbc(1.0, boundary_dofs, V)
+    bc_val = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0))
+    bc = dolfinx.fem.dirichletbc(bc_val, boundary_dofs, V)
 
     options = {
         "ksp_type": "preonly",

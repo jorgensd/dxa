@@ -1,3 +1,5 @@
+import typing
+
 from petsc4py import PETSc
 
 import dolfinx.fem.petsc
@@ -9,23 +11,7 @@ import ufl
 from dolfinx_adjoint.petsc_utils import LinearAdjointProblem, solve_linear_problem
 from dolfinx_adjoint.types import Function
 
-from .assembly import assemble_compiled_form
-
-try:
-    import typing_extensions as typing
-except ModuleNotFoundError:
-    import typing  # type: ignore[no-redef]
-
-
-class solver_kwargs(typing.TypedDict):
-    ad_block_tag: typing.NotRequired[str]
-    """Tag for the block in the adjoint tape."""
-    annotate: typing.NotRequired[bool]
-    """Whether to annotate the assignment in the adjoint tape."""
-    adjoint_petsc_options: typing.NotRequired[dict]
-    """PETSc options to pass to the adjoint solver."""
-    tlm_petsc_options: typing.NotRequired[dict]
-    """PETSc options to pass to the TLM solver."""
+from .assembly import _create_vector, _SpecialVector, assemble_compiled_form
 
 
 class LinearProblemBlock(pyadjoint.Block):
@@ -39,8 +25,8 @@ class LinearProblemBlock(pyadjoint.Block):
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
+        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
+        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
         bcs: typing.Optional[typing.Iterable[dolfinx.fem.DirichletBC]] = None,
         u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]] = None,
         P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
@@ -49,12 +35,13 @@ class LinearProblemBlock(pyadjoint.Block):
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
         entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
-        **kwargs: typing.Unpack[solver_kwargs],
+        ad_block_tag: typing.Optional[str] = None,
+        adjoint_petsc_options: typing.Optional[dict] = None,
+        tlm_petsc_options: typing.Optional[dict] = None,
     ) -> None:
-        self._adjoint_petsc_options = kwargs.pop("adjoint_petsc_options", None)
-        self._tlm_petsc_options = kwargs.pop("tlm_petsc_options", None)
-
-        super().__init__(ad_block_tag=kwargs.pop("ad_block_tag", None))
+        self._adjoint_petsc_options = adjoint_petsc_options
+        self._tlm_petsc_options = tlm_petsc_options
+        super().__init__(ad_block_tag=ad_block_tag)
         self._lhs = a
         self._rhs = L
         self._preconditioner = P
@@ -280,7 +267,8 @@ class LinearProblemBlock(pyadjoint.Block):
             for i in range(len(self._u)):
                 F_form.append([])
                 for j in range(len(self._u)):
-                    F_form[-1] += ufl.action(self._lhs[i][j], replacement_functions[j].saved_output) - self._rhs[j]
+                    F_form[-1] += ufl.action(self._lhs[i][j], replacement_functions[j].saved_output)
+                F_form[-1] -= self._rhs[i]
 
         # NOTE: Will fail for blocked systems atm
         replacement_map = self._create_replace_map(F_form)
@@ -365,18 +353,18 @@ class LinearProblemBlock(pyadjoint.Block):
         if bcs is not None:
             # This system should never be "blocked"
             dolfinx.fem.petsc.apply_lifting(b_tlm.petsc_vec, [dFdu], bcs=[bcs], alpha=0)
-            dolfinx.la.petsc._ghost_update(b_tlm.petsc_vec, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)
+            dolfinx.la.petsc._ghost_update(b_tlm.petsc_vec, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)  # type: ignore [attr-defined]
             for bc in bcs:
                 bc.set(b_tlm.array, alpha=0)
         else:
-            dolfinx.la.petsc._ghost_update(b_tlm, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)
+            dolfinx.la.petsc._ghost_update(b_tlm, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)  # type: ignore [attr-defined]
         solve_linear_problem(A_tlm, dudm.x, b_tlm, petsc_options=self._tlm_petsc_options)
         return dudm
 
     def prepare_evaluate_adj(
         self,
-        inputs: typing.Iterable[Function],
-        adj_inputs: typing.Iterable[dolfinx.la.Vector],
+        inputs: typing.Sequence[Function],
+        adj_inputs: typing.Sequence[dolfinx.la.Vector],
         relevant_dependencies: typing.List[tuple[int, pyadjoint.block_variable.BlockVariable]],
     ) -> typing.Union[ufl.Form, typing.Iterable[ufl.Form]]:
         """Prepare the block for evaluating the adjoint."""
@@ -412,7 +400,7 @@ class LinearProblemBlock(pyadjoint.Block):
         block_variable: pyadjoint.block_variable.BlockVariable,
         idx: int,
         prepared: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
-    ) -> typing.Union[Function, typing.Iterable[Function]]:
+    ) -> typing.Union[_SpecialVector, typing.Iterable[_SpecialVector]]:
         """Evaluate the adjoint component, i.e. :math:`\frac{\\partial Au - b}{\\partial c}`."""
 
         residual = prepared
@@ -434,7 +422,9 @@ class LinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
-        return assemble_compiled_form(compiled_sensitivity)
+        vec = _create_vector(compiled_sensitivity)
+        assemble_compiled_form(compiled_sensitivity, tensor=vec)
+        return vec
 
     def prepare_evaluate_hessian(self, inputs, hessian_inputs, adj_inputs, relevant_dependencies):
         # First fetch all relevant values
