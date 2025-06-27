@@ -28,4 +28,4 @@ jobs:
 
 
       - name: Run tests parallel
-        run: mpirun -n 2 python3 -m pytest -xvs tests/
+        run: mpirun -n 2 python3 -m pytest -vs tests/
