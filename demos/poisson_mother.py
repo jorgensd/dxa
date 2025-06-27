@@ -1,5 +1,5 @@
 # # Optimal Control of the Poisson equation
-# *Section author: Jørgen S. Dokken [(dokken@simula.no)](mailto:dokken@simula.no)*.
+# *Section author: Jørgen S. Dokken ([dokken@simula.no](mailto:dokken@simula.no))*.
 #
 # Original implementation in [dolfin-adjoint](https://github.com/dolfin-adjoint/dolfin-adjoint) was by Simon W. Funke.
 
@@ -41,19 +41,25 @@
 # ## Implementation
 # We start by import the necessary modules for this demo, which includes `mpi4py`, `dolfinx` and `dolfinx_adjoint`.
 
+# +
 from mpi4py import MPI
 
 import dolfinx
 
+# + [markdown]
 # Next we import [Moola](https://github.com/funsim/moola/), which is a Python package
 # containing a collection of optimization solvers specifically designed for PDE-constrained optimization problems.
+# +
 import moola
-import numpy
 import numpy as np
+import pandas
 import pyadjoint
 import ufl
+from moola.adaptors import DolfinxPrimalVector  # noqa: E402
 
 import dolfinx_adjoint
+
+# -
 
 # Next we create a regular mesh of a unit square, which will be our domain $\Omega$.
 # Some optimization algorithms suffer from bad performance when the mesh is non-uniform
@@ -62,7 +68,7 @@ import dolfinx_adjoint
 # We use the DOLFINx refine function to do this.
 
 # +
-n = 64
+n = 16
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, n, n)
 
 
@@ -81,8 +87,8 @@ def refinement_region(x, tol=1e-14):
 mesh.topology.create_connectivity(1, mesh.topology.dim)
 edges_to_refine = dolfinx.mesh.locate_entities(mesh, 1, refinement_region)
 refined_mesh_data = dolfinx.mesh.refine(mesh, edges_to_refine)
-refined_mesh = refined_mesh_data[0]
-
+#refined_mesh = refined_mesh_data[0]
+refined_mesh = mesh
 tdim = refined_mesh.topology.dim
 del mesh
 # -
@@ -90,17 +96,20 @@ del mesh
 # Next we use Pyvista to plot the mesh
 
 # +
-# import pyvista
-# pyvista.set_jupyter_backend("html")
-# import sys, os
-# if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-#     pyvista.start_xvfb(0.05)
+import pyvista
 
-# grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
-# plotter = pyvista.Plotter()
-# plotter.add_mesh(grid, show_edges=True, color="lightgrey")
-# plotter.view_xy()
-# plotter.show()
+pyvista.set_jupyter_backend("html")
+import os
+import sys
+
+if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
+    pyvista.start_xvfb(0.05)
+
+grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
+plotter = pyvista.Plotter()
+plotter.add_mesh(grid, show_edges=True, color="lightgrey")
+plotter.view_xy()
+plotter.show()
 # -
 
 # Then we define the discrete function spaces $V$ and $Q$ for the state and control variable, respectively
@@ -113,7 +122,7 @@ Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
 # control with just two iterations. To make it more interesting, we choose a non-zero initial guess.
 
 f = dolfinx_adjoint.Function(Q, name="Control")
-f.interpolate(lambda x: x[0] + np.sin(2 * x[1]))  # Set intial guess
+f.interpolate(lambda x: x[0]+x[1])  # Set intial guess
 
 # ```{note}
 # As opposed to standard DOLFINx code, we use `dolfinx_adjoint.Function` to create the control function.
@@ -188,57 +197,196 @@ J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 # This object solves the forward PDE using the `pyadjoint.Tape` each time the functional is evaluated.
 # Additionally, it derives and solves the adjoint equation each time the function gradient should be evaluated.
 
+# +
 control = pyadjoint.Control(f)
 Jhat = pyadjoint.ReducedFunctional(J, control)
-
-d = dolfinx_adjoint.Function(Q)
-d.interpolate(lambda x: 10 * x[0])
-
-e = dolfinx_adjoint.Function(Q)
-e.interpolate(lambda x: 10 * numpy.sin(x[0]))
 
 # Now that all ingredients are in place, we can perform the optimization.
 # For this, we employ the `moola.MoolaOptimizationProblem` to generate a problem that
 # is compatible with the Moola framework.
-
-from moola.adaptors import DolfinxPrimalVector  # noqa: E402
 
 optimization_problem = pyadjoint.MoolaOptimizationProblem(Jhat)
 f_moola = DolfinxPrimalVector(f)
 
 # Then, we wrap the control function into a Moola object, and create a `moola.BFGS``
 # solver for solving the optimisation problem
-solver = moola.BFGS(
-    optimization_problem, f_moola, options={"jtol": 0, "gtol": 1e-9, "Hinit": "default", "maxiter": 100, "mem_lim": 10}
-)
+
+# +
+optimization_options = {"jtol": 0, "gtol": 1e-9, "Hinit": "default", "maxiter": 100, "mem_lim": 10, "rjtol": 0}
+solver = moola.BFGS(optimization_problem, f_moola, options=optimization_options)
 
 sol = solver.solve()
 f_opt = sol["control"].data
 
+# Next, we update the control function with the optimal value found by Moola and solve the forward problem to get the optimal state variable.
+
 f.x.array[:] = f_opt.x.array.copy()
-problem.solve()
+problem.solve(annotate=False)
 
+# ## Error analysis
+# For our desired temperature profile, there exist an analytic solution on the following form
+#
+# $$
+# \begin{align*}
+# f_{analytic}(x,y) &= \frac{1}{1 + \alpha 4\pi^4} \sin(\pi x) \sin(\pi y)\\
+# u_{analytic}(x,y) &= \frac{1}{2\pi^2} f_{analytic}(x,y)
+# \end{align*}
+# $$
 
+# We use these, and compute the
 f_analytic = 1 / (1 + alpha * 4 * pow(ufl.pi, 4)) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 u_analytic = 1 / (2 * ufl.pi**2) * f_analytic
 
 
-def error_norm(u_ex, u, norm_type="L2"):
-    diff = u_ex - u
-    norm = ufl.inner(diff, diff) * ufl.dx
-    if norm_type == "H1":
-        norm += ufl.inner(ufl.grad(diff), ufl.grad(diff)) * ufl.dx
-    return np.sqrt(dolfinx_adjoint.assemble_scalar(norm))
-
-
-err_u = error_norm(u_analytic, uh, norm_type="L2")
-err_f = error_norm(f_analytic, f, norm_type="L2")
+err_u = dolfinx_adjoint.error_norm(u_analytic, uh, norm_type="L2", annotate=False)
+err_f = dolfinx_adjoint.error_norm(f_analytic, f, norm_type="L2", annotate=False)
 print(f"Error in state variable: {err_u:.3e}")
 print(f"Error in control variable: {err_f:.3e}")
 
-with dolfinx.io.VTXWriter(MPI.COMM_WORLD, "poisson_mother.bp", [f_opt]) as bp:
-    bp.write(0.0)
 
+# + tags=["hide-input"]
+
+# Plotting space for source
+plotting_space = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 1))
+u_plot = dolfinx.fem.Function(plotting_space)
+u_plot.interpolate(uh)
+f_plot = dolfinx.fem.Function(plotting_space)
+f_plot.interpolate(f)
+
+# Interpolate the analytic solutions to the plotting space
+u_expr = dolfinx.fem.Expression(u_analytic, plotting_space.element.interpolation_points)
+u_ex = dolfinx.fem.Function(plotting_space)
+u_ex.interpolate(u_expr)
+f_expr = dolfinx.fem.Expression(f_analytic, plotting_space.element.interpolation_points)
+f_ex = dolfinx.fem.Function(plotting_space)
+f_ex.interpolate(f_expr)
+
+# Attach data to the plotting grid
+plotting_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(plotting_space))
+plotting_grid.point_data["u_optimal"] = u_plot.x.array
+plotting_grid.point_data["u_exact"] = u_ex.x.array
+plotting_grid.point_data["f_optimal"] = f_plot.x.array
+plotting_grid.point_data["f_exact"] = f_ex.x.array
+
+# Create plotter for all variables
+plotter = pyvista.Plotter(shape=(2, 2))
+plotter.subplot(0, 0)
+scale_factor = 25
+warped_u = plotting_grid.warp_by_scalar("u_optimal", factor=scale_factor)
+plotter.add_mesh(warped_u, color="lightgrey", scalars="u_optimal")
+plotter.subplot(0, 1)
+warped_u_ex = plotting_grid.warp_by_scalar("u_exact", factor=scale_factor)
+plotter.add_mesh(warped_u_ex, color="lightgrey", scalars="u_exact")
+plotter.subplot(1, 0)
+scale_factor = 1
+warped_f = plotting_grid.warp_by_scalar("f_optimal", factor=scale_factor)
+plotter.add_mesh(warped_f, scalars="f_optimal", show_edges=True)
+plotter.subplot(1, 1)
+warped_f_ex = plotting_grid.warp_by_scalar("f_exact", factor=scale_factor)
+plotter.add_mesh(warped_f_ex, scalars="f_exact", show_edges=True)
+plotter.link_views((0, 1))
+plotter.link_views((2, 3))
+plotter.show()
+
+# ## Convergence analysis
+# It is highly desirable that the optimisation algorithm achieve mesh independence: i.e., that the required number of optimisation iterations is independent of the mesh resolution.
+# Achieving mesh independence requires paying careful attention to the inner product structure of the function space in which the solution is sought.
+
+# We therefore perform a mesh convergence analysis with the BFGS algorithm.
+
+
+def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
+    """Solve the optimal control problem for a given mesh resolution.
+
+    Args:
+        N: Number of elements in each direction of the mesh.
+    Returns:
+        Tuple containing the number of BFGS iterations, maximal mesh element size, the error in the state variable, and the error in the control variable,
+        the objective function at the optimal solution and the norm of the functional gradient.
+    """
+    # Reset tape
+    pyadjoint.get_working_tape().clear_tape()
+    mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, N, N)
+    mesh.topology.create_connectivity(1, mesh.topology.dim)
+    edges_to_refine = dolfinx.mesh.locate_entities(mesh, 1, refinement_region)
+    refined_mesh_data = dolfinx.mesh.refine(mesh, edges_to_refine)
+    refined_mesh = refined_mesh_data[0]
+
+    tdim = refined_mesh.topology.dim
+    del mesh
+
+    V = dolfinx.fem.functionspace(refined_mesh, ("Lagrange", 1))
+    Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
+
+    f = dolfinx_adjoint.Function(Q, name="Control")
+    f.interpolate(lambda x: x[0] + np.sin(2 * x[1]))  # Set intial guess
+
+    uh = dolfinx_adjoint.Function(V, name="State")
+
+    u = ufl.TrialFunction(V)
+    v = ufl.TestFunction(V)
+    kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+    F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
+    a, L = ufl.system(F)
+
+    refined_mesh.topology.create_connectivity(tdim - 1, tdim)
+    exterior_facets = dolfinx.mesh.exterior_facet_indices(refined_mesh.topology)
+    exterior_dofs = dolfinx.fem.locate_dofs_topological(V, tdim - 1, exterior_facets)
+    zero = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(0.0))
+    bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
+
+    problem = dolfinx_adjoint.LinearProblem(
+        a, L, u=uh, bcs=[bc], petsc_options=petsc_options, adjoint_petsc_options=petsc_options
+    )
+    problem.solve()
+
+    x, y = ufl.SpatialCoordinate(refined_mesh)
+    d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
+
+    alpha = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
+    J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
+    J = dolfinx_adjoint.assemble_scalar(J_symbolic)
+
+    control = pyadjoint.Control(f)
+    Jhat = pyadjoint.ReducedFunctional(J, control)
+
+    optimization_problem = pyadjoint.MoolaOptimizationProblem(Jhat)
+    f_moola = DolfinxPrimalVector(f)
+    opts = optimization_options.copy()
+    opts["display"] = 2  # Turn down verbosity
+
+    solver = moola.BFGS(optimization_problem, f_moola, options=opts)
+    sol = solver.solve()
+    f_opt = sol["control"].data
+    f.x.array[:] = f_opt.x.array.copy()
+    problem.solve(annotate=False)
+    f_analytic = 1 / (1 + alpha * 4 * pow(ufl.pi, 4)) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
+    u_analytic = 1 / (2 * ufl.pi**2) * f_analytic
+    err_u = dolfinx_adjoint.error_norm(u_analytic, uh, norm_type="L2", annotate=False)
+    err_f = dolfinx_adjoint.error_norm(f_analytic, f, norm_type="L2", annotate=False)
+
+    num_cells = refined_mesh.topology.index_map(tdim).size_local
+    local_h = np.max(refined_mesh.h(tdim, np.arange(num_cells, dtype=np.int32)))
+    global_h = refined_mesh.comm.allreduce(local_h, op=MPI.MAX)
+    return {
+        "iteration": sol["iteration"],
+        "h": global_h,
+        "L2_u": err_u,
+        "L2_f": err_f,
+        "J": sol["objective"],
+        "|dJ/df|": sol["grad_norm"],
+    }
+
+
+results = []
+for N in [16, 32, 64, 128]:
+    results.append(solve_optimal_problem(N))
+dataframe = pandas.DataFrame(results)
+print(dataframe)
+
+# We observe that the number of iterations is independent of the mesh resolution, and that the errors in the state and control goes down with a rate of 1.
+
+# + [markdown]
 # ## References
 # ```{bibliography}
 # :filter: cited and ({"demos/poisson_mother"} >= docnames)

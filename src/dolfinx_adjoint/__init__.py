@@ -5,7 +5,7 @@ from importlib.metadata import metadata
 # Start annotation at import
 import pyadjoint as _pyad
 
-from .assembly import assemble_scalar
+from .assembly import assemble_scalar, error_norm
 from .solvers import LinearProblem
 from .types import Function
 from .types.function import assign
@@ -26,6 +26,7 @@ __all__ = [
     "LinearProblem",
     "assemble_scalar",
     "assign",
+    "error_norm",
     "__version__",
     "__author__",
     "__license__",
