@@ -40,6 +40,7 @@ from mpi4py import MPI
 import pyadjoint
 import dolfinx
 import dolfinx_adjoint
+import numpy as np
 
 # Next we import [Moola](https://github.com/funsim/moola/), which is a Python package
 # containing a collection of optimization solvers specifically designed for PDE-constrained optimization problems.
@@ -71,6 +72,7 @@ edges_to_refine = dolfinx.mesh.locate_entities(
     mesh, 1, refinement_region
 )
 refined_mesh, _, _ = dolfinx.mesh.refine(mesh, edges_to_refine)
+
 tdim = refined_mesh.topology.dim
 del mesh
 # -
@@ -101,7 +103,7 @@ Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
 # To make it more interesting, we choose a non-zero initial guess.
 
 f = dolfinx_adjoint.Function(Q, name="Control")
-f.interpolate(lambda x: x[0] + x[1])  # Set intial guess
+f.interpolate(lambda x: x[0] + np.sin(2*x[1]))  # Set intial guess
 
 # ```{note}
 # As opposed to standard DOLFINx code, we use `dolfinx_adjoint.Function` to create the control function.
@@ -151,6 +153,7 @@ d =  1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 # The functional is written out in `ufl` and assembled with `dolfinx_adjoint.assemble_scalar`
 
 alpha = dolfinx.fem.Constant(refined_mesh, 1.0e-6)  # Tikhonov regularization parameter
+alpha.name = "alpha"
 J_symbolic = 0.5*ufl.inner(uh-d, uh-d) * ufl.dx + 0.5*alpha*ufl.inner(f, f) * ufl.dx
 J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 
@@ -171,39 +174,52 @@ J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 
 control = pyadjoint.Control(f)
 Jhat = pyadjoint.ReducedFunctional(J, control)
-Jhat.derivative()
+import numpy
+d = dolfinx_adjoint.Function(Q)
+d.interpolate(lambda x: 10 * x[0])
 
-tol = 1e-6
-opt = pyadjoint.minimize(
-    Jhat,
-    method="Newton-CG",
-    tol=tol,
-    scale=1,
-    options={"maxiter": 200, "disp": True},
-    derivative_options={
-        "riesz_representation": "l2",
-        "petsc_options": {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"},
-        "jit_options": {"cffi_extra_compile_args": ["-Ofast", "-march=native"], "cffi_libraries": ["m"]},
-    },
-)
+e = dolfinx_adjoint.Function(Q)
+e.interpolate(lambda x: 10 * numpy.sin(x[0]))
 
-# # Now that all ingredients are in place, we can perform the optimization.
-# # For this, we employ the `moola.MoolaOptimizationProblem` to generate a problem that is compatible with the Moola framework.
+# Now that all ingredients are in place, we can perform the optimization.
+# For this, we employ the `moola.MoolaOptimizationProblem` to generate a problem that is compatible with the Moola framework.
 
-# from dolfinx_adjoint.moola_adapters import DolfinxPrimalVector
-# problem = pyadjoint.MoolaOptimizationProblem(rf)
-# f_moola = DolfinxPrimalVector(f)
+from moola.adaptors import DolfinxPrimalVector
+optimization_problem = pyadjoint.MoolaOptimizationProblem(Jhat)
+f_moola = DolfinxPrimalVector(f)
 
-# # Then, we wrap the control function into a Moola object, and create a `moola.NewtonCG`` solver for solving the optimisation problem
-# # FIXME: Add DOLFINx.la.Vector as block variable in DOLFINx-adjoint
-# solver = moola.NewtonCG(problem, f_moola, options={'gtol': 1e-9,
-#                                                    'maxiter': 20,
-#                                                    'display': 3,
-#                                                    'ncg_hesstol': 0})
+# Then, we wrap the control function into a Moola object, and create a `moola.NewtonCG`` solver for solving the optimisation problem
+solver = moola.BFGS(optimization_problem, f_moola, options={'jtol': 0,
+                                               'gtol': 1e-9,
+                                               'Hinit': "default",
+                                               'maxiter': 100,
+                                               'mem_lim': 10
+        })
 
-# sol = solver.solve()
-# f_opt = sol['control'].data
-# print(f_opt)
+sol = solver.solve()
+f_opt = sol['control'].data
+
+f.x.array[:] = f_opt.x.array.copy()
+problem.solve()
+
+
+f_analytic =1/(1+alpha*4*pow(ufl.pi, 4))*ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
+u_analytic = 1/(2*ufl.pi**2)*f_analytic
+
+def error_norm(u_ex, u, norm_type="L2"):
+    diff = u_ex - u
+    norm = ufl.inner(diff, diff) * ufl.dx
+    if norm_type == "H1":
+        norm += ufl.inner(ufl.grad(diff), ufl.grad(diff)) * ufl.dx
+    return np.sqrt(dolfinx_adjoint.assemble_scalar(norm))
+
+err_u = error_norm(u_analytic, uh, norm_type="L2")
+err_f = error_norm(f_analytic, f, norm_type="L2")
+print(f"Error in state variable: {err_u:.3e}")
+print(f"Error in control variable: {err_f:.3e}")
+
+with dolfinx.io.VTXWriter(MPI.COMM_WORLD, "poisson_mother.bp", [f_opt]) as bp:
+    bp.write(0.0)
 
 # ## References
 # ```{bibliography}
