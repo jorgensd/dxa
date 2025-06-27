@@ -168,7 +168,7 @@ d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 # The functional is written out in `ufl` and assembled with `dolfinx_adjoint.assemble_scalar`
 
 alpha = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
-alpha.name = "alpha"
+alpha.name = "alpha"  # type: ignore
 J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
 J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 

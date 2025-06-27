@@ -25,8 +25,8 @@ class LinearProblemBlock(pyadjoint.Block):
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
+        L: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
         bcs: typing.Optional[typing.Iterable[dolfinx.fem.DirichletBC]] = None,
         u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]] = None,
         P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
@@ -68,7 +68,7 @@ class LinearProblemBlock(pyadjoint.Block):
         except AttributeError:
             raise NotImplementedError("Blocked systems not implemented yet.")
         self._compiled_lhs = dolfinx.fem.form(
-            self._lhs,
+            self._lhs,  # type: ignore
             jit_options=jit_options,
             form_compiler_options=form_compiler_options,
             entity_maps=entity_maps,
@@ -213,7 +213,7 @@ class LinearProblemBlock(pyadjoint.Block):
 
     def recompute_component(
         self, inputs: typing.Iterable[Function], block_variable, idx: int, prepared: None
-    ) -> typing.Union[Function, typing.Iterable[Function]]:
+    ) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
         """Recompute the block with the prepared linear problem."""
         return self._forward_solver.solve()
 
@@ -230,21 +230,26 @@ class LinearProblemBlock(pyadjoint.Block):
 
     @classmethod
     def _compute_adjoint(
-        cls, form: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]
-    ) -> typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]:
+        cls, form: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]
+    ) -> typing.Union[ufl.Form, typing.Sequence[typing.Iterable[ufl.Form]]]:
         """
         Compute adjoint of a bilinear form :math:`a(u, v)`, which could be written as a blocked system.
         """
         if isinstance(form, ufl.Form):
             return ufl.adjoint(form)
         else:
-            assert isinstance(form, typing.Sequence)
+            assert isinstance(form, typing.Iterable)
             adj_form: list[list[ufl.Form]] = []
-            for i in range(len(form)):
-                assert len(form[i]) == len(form), "Expected a square blocked system."
+            tmp_form: list[list[ufl.Form]] = []
+            for i, f_i in enumerate(form):
+                tmp_form.append([])
                 adj_form.append([])
-                for j in range(len(form[i])):
-                    adj_form[i][j] = ufl.adjoint(form[j][i])
+                for j, form_ij in enumerate(f_i):
+                    tmp_form[i].append(ufl.adjoint(form_ij))
+                    adj_form[i].append(ufl.adjoint(form_ij))
+            for i, f_i in enumerate(tmp_form):
+                for j, form_ij in enumerate(f_i):
+                    adj_form[j][i] = form_ij
             return adj_form
 
     def _compute_residual(self) -> typing.Union[ufl.Form, list[ufl.Form]]:
@@ -304,14 +309,14 @@ class LinearProblemBlock(pyadjoint.Block):
     ) -> tuple[typing.Union[list[ufl.Form], ufl.Form], dolfinx.fem.Form]:
         F_form = self._compute_residual()
         dFdu_compiled = dolfinx.fem.form(
-            self._compute_residual_derivative(),
+            self._compute_residual_derivative(),  # type: ignore[arg-type]
             jit_options=self._jit_options,
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
         return F_form, dFdu_compiled
 
-    def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None) -> Function:
+    def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None) -> dolfinx.fem.Function:
         """Solve the TLM equation for the block variable.
 
         .. math::
@@ -388,7 +393,7 @@ class LinearProblemBlock(pyadjoint.Block):
 
         # Solve adjoint problem
         compiled_dFdu = dolfinx.fem.form(
-            dFdu_adj,
+            dFdu_adj,  # type: ignore[arg-type]
             jit_options=self._jit_options,
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
