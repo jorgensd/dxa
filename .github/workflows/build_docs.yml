@@ -32,8 +32,17 @@ jobs:
       - name: Build docs
         run: jupyter book build -W .
 
-      - name: Upload artifact
+      - name: Upload artifact 
         uses: actions/upload-artifact@v4
+        # always upload artifact, which can include error messages
+        if: always()
         with:
-          path: ${{ env.PUBLISH_DIR }}
           name: documentation
+          path: ${{ env.PUBLISH_DIR }}
+          retention-days: 2
+          if-no-files-found: error
+
+      - name: Show error reports
+        if: failure()
+        run: |
+          find _build/html/reports -type f -print -exec cat {} \;
