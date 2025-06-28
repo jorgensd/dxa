@@ -18,6 +18,22 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
     """A linear problem that can be used with adjoint methods.
 
     This class extends the `dolfinx.fem.petsc.LinearProblem` to support adjoint methods.
+
+    Args:
+        a: The bilinear form representing the left-hand side of the equation.
+        L: The linear form representing the right-hand side of the equation.
+        bcs: Boundary conditions to apply to the problem.
+        u: Solution vector.
+        P: Preconditioner for the linear problem.
+        kind: Kind of PETSc Matrix to assemble the system into.
+        petsc_options: Options dictionary for the PETSc krylov supspace solver.
+        form_compiler_options: Form compiler options for generating assembly kernels.
+        jit_options: Options for just-in-time compilation of the forms.
+        entity_maps: Mapping from meshes that coefficients and arguments are defined on to the
+            integration domain of the forms.
+        ad_block_tag: Tag for adjoint blocks in the tape.
+        adjoint_petsc_options: PETSc options for adjoint problems.
+        tlm_petsc_options: Optional PETSc options for TLM problems.
     """
 
     def __init__(
@@ -37,8 +53,8 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         tlm_petsc_options: typing.Optional[dict] = None,
     ) -> None:
         self.ad_block_tag = ad_block_tag
-        self._adjoint_options = adjoint_petsc_options
-        self._tlm_petsc_options = tlm_petsc_options
+        self._adj_options = adjoint_petsc_options
+        self._tlm_options = tlm_petsc_options
         if u is None:
             try:
                 # Extract function space for unknown from the right hand
@@ -87,8 +103,8 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
                 jit_options=self._jit_options,
                 entity_maps=self._entity_maps,
                 ad_block_tag=self.ad_block_tag,
-                adjoint_petsc_options=self._adjoint_options,
-                tlm_petsc_options=self._tlm_petsc_options,
+                adjoint_petsc_options=self._adj_options,
+                tlm_petsc_options=self._tlm_options,
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)

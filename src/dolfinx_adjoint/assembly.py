@@ -1,6 +1,10 @@
+import typing
+
 from mpi4py import MPI
 
 import dolfinx
+import numpy
+import numpy.typing as npt
 import ufl
 from pyadjoint.overloaded_type import create_overloaded_object
 from pyadjoint.tape import annotate_tape, get_working_tape, stop_annotating
@@ -47,3 +51,43 @@ def assemble_scalar(form: ufl.Form, **kwargs):
         block.add_output(output.block_variable)
 
     return output
+
+
+def error_norm(
+    u_ex: ufl.core.expr.Expr,
+    u: ufl.core.expr.Expr,
+    norm_type=typing.Literal["L2", "H1"],
+    jit_options: typing.Optional[dict] = None,
+    form_compiler_options: typing.Optional[dict] = None,
+    entity_map: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[numpy.int32]]] = None,
+    ad_block_tag: typing.Optional[str] = None,
+    annotate: bool = True,
+) -> float:
+    """Compute the error norm between the exact solution and the computed solution.
+
+    Args:
+        u_ex: The exact solution as a UFL expression.
+        u: The computed solution as a UFL expression.
+        norm_type: The type of norm to compute, either "L2" or "H1".
+        jit_options: Optional JIT compilation options.
+        form_compiler_options: Optional form compiler options.
+        entity_map: Optional mapping from mesh entities to submesh entities.
+        ad_block_tag: Optional tag for the block in the adjoint tape.
+        annotate: Whether to annotate the assignment in the adjoint tape.
+    Returns:
+        The computed error norm as a float.
+    """
+    diff = u_ex - u
+    norm = ufl.inner(diff, diff) * ufl.dx
+    if norm_type == "H1":
+        norm += ufl.inner(ufl.grad(diff), ufl.grad(diff)) * ufl.dx
+    return numpy.sqrt(
+        assemble_scalar(
+            norm,
+            jit_options=jit_options,
+            form_compiler_options=form_compiler_options,
+            entity_maps=entity_map,
+            ad_block_tag=ad_block_tag,
+            annotate=annotate,
+        )
+    )

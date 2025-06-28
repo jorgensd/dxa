@@ -31,7 +31,7 @@ def test_assign(mesh_var_name: str, request):
 
     mesh = request.getfixturevalue(mesh_var_name)
 
-    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))  # type: ignore[arg-type]
     u = Function(V)
     u.name = "u_output"
 

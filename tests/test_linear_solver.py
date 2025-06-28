@@ -33,7 +33,7 @@ def test_solver(mesh_var_name: str, request, constant: typing.Union[float, int, 
     pyadjoint.get_working_tape().clear_tape()
     mesh = request.getfixturevalue(mesh_var_name)
 
-    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))  # type: ignore[arg-type]
     uh = Function(V, name="u_output")
 
     f = Function(V, name="control")

@@ -109,7 +109,6 @@ class LinearProblemBlock(pyadjoint.Block):
             assert isinstance(self._u, typing.Iterable)
             self._adjoint_solutions = [u.copy() for u in self._u]
             self._second_adjoint_solutions = [u.copy() for u in self._u]
-
         self._adjoint_solver = LinearAdjointProblem(
             self._compute_adjoint(self._lhs),
             self._rhs,
@@ -122,9 +121,6 @@ class LinearProblemBlock(pyadjoint.Block):
             kind=kind,
             entity_maps=self._entity_maps,
         )
-
-    # def _create_residual(self)-> ufl.Form:
-    #     """Replace the linear problem with a residual of the output function(s)."""
 
     def _recover_bcs(self):
         bcs = []
@@ -400,6 +396,7 @@ class LinearProblemBlock(pyadjoint.Block):
         )
         self._adjoint_solver._a = compiled_dFdu
         self._adjoint_solver._b = dJdu.petsc_vec
+        self._adjoint_solver._u = self._adjoint_solutions  # type: ignore[assignment]
         self._adjoint_solver.solve()
 
         return F_form

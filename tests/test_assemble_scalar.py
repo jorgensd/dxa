@@ -29,7 +29,7 @@ def test_function_control(mesh_var_name: str, request):
     pyadjoint.get_working_tape().clear_tape()
     mesh = request.getfixturevalue(mesh_var_name)
 
-    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))  # type: ignore[arg-type]
 
     v = Function(V)
     v.name = "v"
