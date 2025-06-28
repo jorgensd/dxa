@@ -34,7 +34,6 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         ad_block_tag: Tag for adjoint blocks in the tape.
         adjoint_petsc_options: PETSc options for adjoint problems.
         tlm_petsc_options: Optional PETSc options for TLM problems.
-        second_order_adjoint_petsc_options: PETSc options for second-order adjoint problems.
     """
 
     def __init__(
@@ -52,12 +51,10 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         ad_block_tag: typing.Optional[str] = None,
         adjoint_petsc_options: typing.Optional[dict] = None,
         tlm_petsc_options: typing.Optional[dict] = None,
-        second_order_adjoint_petsc_options: typing.Optional[dict] = None,
     ) -> None:
         self.ad_block_tag = ad_block_tag
         self._adj_options = adjoint_petsc_options
         self._tlm_options = tlm_petsc_options
-        self._soa_options = second_order_adjoint_petsc_options
         if u is None:
             try:
                 # Extract function space for unknown from the right hand

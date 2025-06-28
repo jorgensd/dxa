@@ -441,11 +441,16 @@ for N in [16, 32, 64, 128]:
 # However, if we set it to a small value, we should observe a low number of iterations, that is also independent
 # of the mesh resolution.
 
-pandas.DataFrame(results_newton_cg)
-
+newton_results = pandas.DataFrame(results_newton_cg)
+newton_results
 
 # + [markdown]
 # ## References
 # ```{bibliography}
 # :filter: cited and ({"demos/poisson_mother"} >= docnames)
 # ```
+# -
+
+# + tags=["hide-input"]
+assert newton_results["Number of iterations"].max() == 3
+# -
