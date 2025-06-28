@@ -396,7 +396,7 @@ class LinearProblemBlock(pyadjoint.Block):
         )
         self._adjoint_solver._a = compiled_dFdu
         self._adjoint_solver._b = dJdu.petsc_vec
-        self._adjoint_solver._u = self._adjoint_solutions
+        self._adjoint_solver._u = self._adjoint_solutions  # type: ignore[assignment]
         self._adjoint_solver.solve()
 
         return F_form

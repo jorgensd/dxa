@@ -118,8 +118,8 @@ plotter.show()
 
 # Then we define the discrete function spaces $V$ and $Q$ for the state and control variable, respectively
 
-V = dolfinx.fem.functionspace(refined_mesh, ("Lagrange", 1))
-Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
+V = dolfinx.fem.functionspace(refined_mesh, ("Lagrange", 1))  # type: ignore[arg-type]
+Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))  # type: ignore[arg-type]
 
 # The optimization algorithm will use the value of the control function $f$ as an initial guess for the optimization.
 # A zero intial guess seems to be too simple: For example the L-BFGS algorithm will find the optimial
@@ -267,7 +267,7 @@ print(f"Error in control variable: {err_f:.3e}")
 # + tags=["hide-input"]
 
 # Plotting space for source
-plotting_space = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 1))
+plotting_space = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 1))  # type: ignore[arg-type]
 u_plot = dolfinx.fem.Function(plotting_space)
 u_plot.interpolate(uh)
 f_plot = dolfinx.fem.Function(plotting_space)
@@ -282,7 +282,7 @@ f_ex = dolfinx.fem.Function(plotting_space)
 f_ex.interpolate(f_expr)
 
 # Attach data to the plotting grid
-plotting_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(plotting_space))
+plotting_grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(plotting_space))  # type: ignore[arg-type]
 plotting_grid.point_data["u_optimal"] = u_plot.x.array
 plotting_grid.point_data["u_exact"] = u_ex.x.array
 plotting_grid.point_data["f_optimal"] = f_plot.x.array
@@ -321,16 +321,14 @@ plotter.show()
 
 
 # + tags=["hide-input"]
-def solve_optimal_problem(N: int, use_newton: bool = False) -> tuple[float, float, float, float, float]:
+def solve_optimal_problem(N: int, use_newton: bool = False) -> dict[str, float | int]:
     """Solve the optimal control problem for a given mesh resolution.
 
     Args:
         N: Number of elements in each direction of the mesh.
         use_newton: Whether to use Newton-CG instead of BFGS for the optimization.
     Returns:
-        Tuple containing the number of BFGS iterations, maximal mesh element size, the error in
-        the state variable, and the error in the control variable,
-        the objective function at the optimal solution and the norm of the functional gradient.
+        A dictionary containing the results of the optimization problem.
     """
     # Reset tape
     pyadjoint.get_working_tape().clear_tape()
@@ -343,8 +341,8 @@ def solve_optimal_problem(N: int, use_newton: bool = False) -> tuple[float, floa
     tdim = refined_mesh.topology.dim
     del mesh
 
-    V = dolfinx.fem.functionspace(refined_mesh, ("Lagrange", 1))
-    Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
+    V = dolfinx.fem.functionspace(refined_mesh, ("Lagrange", 1))  # type: ignore[arg-type]
+    Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))  # type: ignore[arg-type]
 
     f = dolfinx_adjoint.Function(Q, name="Control")
     f.interpolate(lambda x: x[0] + np.sin(2 * x[1]))  # Set intial guess
