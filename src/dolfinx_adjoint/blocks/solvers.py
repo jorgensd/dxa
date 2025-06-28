@@ -135,7 +135,6 @@ class LinearProblemBlock(pyadjoint.Block):
             entity_maps=self._entity_maps,
         )
 
-
     def _recover_bcs(self):
         bcs = []
         for block_variable in self.get_dependencies():

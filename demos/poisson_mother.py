@@ -42,6 +42,9 @@
 # We start by import the necessary modules for this demo, which includes `mpi4py`, `dolfinx` and `dolfinx_adjoint`.
 
 # +
+import os
+import sys
+
 from mpi4py import MPI
 
 import dolfinx
@@ -54,6 +57,7 @@ import moola
 import numpy as np
 import pandas
 import pyadjoint
+import pyvista
 import ufl
 from moola.adaptors import DolfinxPrimalVector  # noqa: E402
 
@@ -61,6 +65,15 @@ import dolfinx_adjoint
 
 # -
 
+# We configure Pyvista for rendering
+
+# + tags=["hide-input"]
+pyvista.set_jupyter_backend("html")
+if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
+    pyvista.start_xvfb(0.05)
+# -
+
+# + [markdown]
 # Next we create a regular mesh of a unit square, which will be our domain $\Omega$.
 # Some optimization algorithms suffer from bad performance when the mesh is non-uniform
 # (i.e. when the mesh is partially refined).
@@ -95,14 +108,6 @@ del mesh
 # Next we use Pyvista to plot the mesh
 
 # +
-import pyvista
-
-pyvista.set_jupyter_backend("html")
-import os
-import sys
-
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
 
 grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
 plotter = pyvista.Plotter()
@@ -121,7 +126,7 @@ Q = dolfinx.fem.functionspace(refined_mesh, ("Discontinuous Lagrange", 0))
 # control with just two iterations. To make it more interesting, we choose a non-zero initial guess.
 
 f = dolfinx_adjoint.Function(Q, name="Control")
-f.interpolate(lambda x: x[0]+x[1])  # Set intial guess
+f.interpolate(lambda x: x[0] + x[1])  # Set intial guess
 
 # ```{note}
 # As opposed to standard DOLFINx code, we use `dolfinx_adjoint.Function` to create the control function.
@@ -149,6 +154,14 @@ bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
 
 # Next, we define a `dolfinx_adjoint.LinearProblem` instance, which overloads
 # the `dolfinx.fem.petsc.LinearProblem` class.
+#
+# ```{note}
+# When creating the :py:func`dolfinx_adjoint.LinearProblem`, we can specify the solver options that
+# are passed on to the underlying PETSc Krylov subspace solver.
+# This is also the place to pass in solver options for the first and second order adjoint equations
+# and the tangent linear model (TLM) equation.
+# ```
+#
 
 petsc_options = {
     "ksp_type": "preonly",
@@ -157,7 +170,13 @@ petsc_options = {
     "ksp_error_if_not_converged": True,
 }
 problem = dolfinx_adjoint.LinearProblem(
-    a, L, u=uh, bcs=[bc], petsc_options=petsc_options, adjoint_petsc_options=petsc_options
+    a,
+    L,
+    u=uh,
+    bcs=[bc],
+    petsc_options=petsc_options,
+    adjoint_petsc_options=petsc_options,
+    tlm_petsc_options=petsc_options,  # type: ignore
 )
 problem.solve()
 
@@ -196,7 +215,6 @@ J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 # This object solves the forward PDE using the `pyadjoint.Tape` each time the functional is evaluated.
 # Additionally, it derives and solves the adjoint equation each time the function gradient should be evaluated.
 
-# +
 control = pyadjoint.Control(f)
 Jhat = pyadjoint.ReducedFunctional(J, control)
 
@@ -210,16 +228,17 @@ f_moola = DolfinxPrimalVector(f)
 # Then, we wrap the control function into a Moola object, and create a `moola.BFGS``
 # solver for solving the optimisation problem
 
-# +
+# + tags=["scroll-output"]
 optimization_options = {"jtol": 0, "gtol": 1e-9, "Hinit": "default", "maxiter": 100, "mem_lim": 10, "rjtol": 0}
 solver = moola.BFGS(optimization_problem, f_moola, options=optimization_options)
+solution = solver.solve()
+# -
 
-sol = solver.solve()
-f_opt = sol["control"].data
+# Next, we update the control function with the optimal value found by Moola and solve the forward problem to
+# get the optimal state variable.
 
-# Next, we update the control function with the optimal value found by Moola and solve the forward problem to get the optimal state variable.
-
-f.x.array[:] = f_opt.x.array.copy()
+f_opt = solution["control"].data
+f.x.array[:] = f_opt.x.array  # f_opt.x.array.copy()
 problem.solve(annotate=False)
 
 # ## Error analysis
@@ -242,6 +261,8 @@ err_f = dolfinx_adjoint.error_norm(f_analytic, f, norm_type="L2", annotate=False
 print(f"Error in state variable: {err_u:.3e}")
 print(f"Error in control variable: {err_f:.3e}")
 
+
+# We visualize the results using Pyvista.
 
 # + tags=["hide-input"]
 
@@ -286,21 +307,29 @@ plotter.add_mesh(warped_f_ex, scalars="f_exact", show_edges=True)
 plotter.link_views((0, 1))
 plotter.link_views((2, 3))
 plotter.show()
+# -
 
-# ## Convergence analysis
-# It is highly desirable that the optimisation algorithm achieve mesh independence: i.e., that the required number of optimisation iterations is independent of the mesh resolution.
-# Achieving mesh independence requires paying careful attention to the inner product structure of the function space in which the solution is sought.
+# ## Convergence analysis (mesh independence)
+# It is highly desirable that the optimisation algorithm achieve mesh independence: i.e.,
+# that the required number of optimisation iterations is independent of the mesh resolution.
+# Achieving mesh independence requires paying careful attention to the inner product structure
+# of the function space in which the solution is sought.
 
-# We therefore perform a mesh convergence analysis with the BFGS algorithm.
+# We therefore perform a mesh convergence analysis with the BFGS algorithm and the Newton-CG algorithm.
+# By expanding the dropdown below, you will see the same implementation as above, but wrapped in a function
+# that can be called with different mesh resolutions.
 
 
-def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
+# + tags=["hide-input"]
+def solve_optimal_problem(N: int, use_newton: bool = False) -> tuple[float, float, float, float, float]:
     """Solve the optimal control problem for a given mesh resolution.
 
     Args:
         N: Number of elements in each direction of the mesh.
+        use_newton: Whether to use Newton-CG instead of BFGS for the optimization.
     Returns:
-        Tuple containing the number of BFGS iterations, maximal mesh element size, the error in the state variable, and the error in the control variable,
+        Tuple containing the number of BFGS iterations, maximal mesh element size, the error in
+        the state variable, and the error in the control variable,
         the objective function at the optimal solution and the norm of the functional gradient.
     """
     # Reset tape
@@ -310,7 +339,7 @@ def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
     edges_to_refine = dolfinx.mesh.locate_entities(mesh, 1, refinement_region)
     refined_mesh_data = dolfinx.mesh.refine(mesh, edges_to_refine)
     refined_mesh = refined_mesh_data[0]
-
+    refined_mesh = mesh  # Use the original mesh for testing
     tdim = refined_mesh.topology.dim
     del mesh
 
@@ -351,10 +380,21 @@ def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
 
     optimization_problem = pyadjoint.MoolaOptimizationProblem(Jhat)
     f_moola = DolfinxPrimalVector(f)
-    opts = optimization_options.copy()
-    opts["display"] = 2  # Turn down verbosity
-
-    solver = moola.BFGS(optimization_problem, f_moola, options=opts)
+    if use_newton:
+        solver = moola.NewtonCG(
+            optimization_problem,
+            f_moola,
+            options={
+                "gtol": 1e-9,
+                "maxiter": 20,
+                "display": 0,
+                "ncg_hesstol": 0,
+            },
+        )
+    else:
+        opts = optimization_options.copy()
+        opts["display"] = 0  # Turn down verbosity
+        solver = moola.BFGS(optimization_problem, f_moola, options=opts)
     sol = solver.solve()
     f_opt = sol["control"].data
     f.x.array[:] = f_opt.x.array.copy()
@@ -368,7 +408,7 @@ def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
     local_h = np.max(refined_mesh.h(tdim, np.arange(num_cells, dtype=np.int32)))
     global_h = refined_mesh.comm.allreduce(local_h, op=MPI.MAX)
     return {
-        "iteration": sol["iteration"],
+        "Number of iterations": sol["iteration"],
         "h": global_h,
         "L2_u": err_u,
         "L2_f": err_f,
@@ -377,13 +417,32 @@ def solve_optimal_problem(N: int) -> tuple[float, float, float, float, float]:
     }
 
 
-results = []
-for N in [16, 32, 64, 128]:
-    results.append(solve_optimal_problem(N))
-dataframe = pandas.DataFrame(results)
-print(dataframe)
+# -
 
-# We observe that the number of iterations is independent of the mesh resolution, and that the errors in the state and control goes down with a rate of 1.
+# ### BFGS results
+# We run the BFGS algorithm for different mesh resolutions and collect the results.
+
+results_bfgs = []
+for N in [16, 32, 64, 128]:
+    results_bfgs.append(solve_optimal_problem(N, use_newton=False))
+
+pandas.DataFrame(results_bfgs)
+
+# We observe that the number of iterations is independent of the mesh resolution, and that the errors in the
+# state and control goes down with a rate of 1.
+
+results_newton_cg = []
+for N in [16, 32, 64, 128]:
+    results_newton_cg.append(solve_optimal_problem(N, use_newton=True))
+
+# ### Newton-CG results
+# We can also check the convergence of an algorithm using Hessian information, like Newton-CG.
+# If we set the tolerance of the Conjugate Gradient solver to zero, the algorithm will converge in one iteration.
+# However, if we set it to a small value, we should observe a low number of iterations, that is also independent
+# of the mesh resolution.
+
+pandas.DataFrame(results_newton_cg)
+
 
 # + [markdown]
 # ## References
