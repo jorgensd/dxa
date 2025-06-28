@@ -334,11 +334,6 @@ class AssembleBlock(Block):
         else:
             return None
         hessian_outputs, dform = self.compute_action_adjoint(hessian_input, arity_form, form, c1_rep, space)
-
-        # print("Dolfinx in", c1_rep.function_space, hessian_input, adj_input)
-
-        # print("DOLFINx hessian outputs", np.linalg.norm(hessian_outputs.array))
-
         ddform = 0
         for other_idx, bv in relevant_dependencies:
             c2_rep = bv.saved_output
@@ -358,14 +353,10 @@ class AssembleBlock(Block):
         if not ddform.empty():
             # FIXME: COmpare ddform with legacy dolfin_adjoitn here, as this is DG-0, while hessian is in DG-0
             adj_action = self.compute_action_adjoint(adj_input, arity_form, dform=ddform)[0]
-            # print("ADJ ACTION", np.linalg.norm(adj_action.array[:]))
             try:
                 hessian_outputs += adj_action
             except TypeError:
                 hessian_outputs.array[:] += adj_action.array[:]
-        # print("DOLFINx in", hessian_inputs, adj_inputs)
-        # print("DOLFINx", np.linalg.norm(hessian_outputs.array))
-
         return hessian_outputs
 
     def prepare_recompute_component(self, inputs, relevant_outputs):

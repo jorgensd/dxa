@@ -109,7 +109,6 @@ class LinearProblemBlock(pyadjoint.Block):
             assert isinstance(self._u, typing.Iterable)
             self._adjoint_solutions = [u.copy() for u in self._u]
             self._second_adjoint_solutions = [u.copy() for u in self._u]
-
         self._adjoint_solver = LinearAdjointProblem(
             self._compute_adjoint(self._lhs),
             self._rhs,
@@ -123,8 +122,19 @@ class LinearProblemBlock(pyadjoint.Block):
             entity_maps=self._entity_maps,
         )
 
-    # def _create_residual(self)-> ufl.Form:
-    #     """Replace the linear problem with a residual of the output function(s)."""
+        self._second_order_adjoint_solver = LinearAdjointProblem(
+            self._compute_adjoint(self._lhs),
+            self._rhs,
+            bcs=self._bcs,
+            u=self._second_adjoint_solutions,
+            P=self._preconditioner,
+            form_compiler_options=self._form_compiler_options,
+            jit_options=self._jit_options,
+            petsc_options=self._adjoint_petsc_options,
+            kind=kind,
+            entity_maps=self._entity_maps,
+        )
+
 
     def _recover_bcs(self):
         bcs = []
@@ -486,10 +496,10 @@ class LinearProblemBlock(pyadjoint.Block):
         )
 
         # Solve adjoint problem
-        self._adjoint_solver._a = dFdu_adj
-        self._adjoint_solver._b = b.petsc_vec
-        self._adjoint_solver._u = self._second_adjoint_solutions
-        self._adjoint_solver.solve()
+        self._second_order_adjoint_solver._a = dFdu_adj
+        self._second_order_adjoint_solver._b = b.petsc_vec
+        self._second_order_adjoint_solver._u = self._second_adjoint_solutions
+        self._second_order_adjoint_solver.solve()
         return self._compute_residual(), self._adjoint_solutions, self._second_adjoint_solutions
 
     def evaluate_hessian_component(
