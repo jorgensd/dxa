@@ -178,7 +178,7 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType):
 
     # Get reference values
     J_ref, dJ_ref, H_ref, ref_perturbations = reference_solution(
-        mesh, d, alpha, m_func, step_func, steps=steps, step_length=step_length
+        mesh, d, alpha, m_func, step_func, num_steps=steps, step_length=step_length
     )
 
     pyadjoint.get_working_tape().clear_tape()
