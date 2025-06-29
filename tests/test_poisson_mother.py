@@ -35,8 +35,8 @@ def reference_solution(
     the TLM and first and second order derivatives of J."""
 
     # Set up function spaces
-    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
-    Q = dolfinx.fem.functionspace(mesh, ("DG", 0))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))  # type: ignore[arg-type]
+    Q = dolfinx.fem.functionspace(mesh, ("DG", 0))  # type: ignore[arg-type]
     uh = dolfinx.fem.Function(V)  # Unknown
     du = ufl.TrialFunction(V)
     dv = ufl.TestFunction(V)
@@ -153,7 +153,7 @@ def reference_solution(
 
 
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
-def test_poisson_mother(cell_type):
+def test_poisson_mother(cell_type: dolfinx.mesh.CellType):
     """Compare differentiation of the Poisson mother problem with a hand-written implementation."""
     steps = 4
     step_length = 0.01
@@ -183,8 +183,8 @@ def test_poisson_mother(cell_type):
 
     pyadjoint.get_working_tape().clear_tape()
 
-    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
-    Q = dolfinx.fem.functionspace(mesh, ("DG", 0))
+    V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))  # type: ignore[arg-type]
+    Q = dolfinx.fem.functionspace(mesh, ("DG", 0))  # type: ignore[arg-type]
     f = Function(Q, name="Control")
     f.interpolate(m_func)
     uh = Function(V, name="State")
