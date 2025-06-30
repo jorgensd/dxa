@@ -141,6 +141,8 @@ uh = dolfinx_adjoint.Function(V, name="State")
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
 kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+#kappa = dolfinx_adjoint.Function(V, name="kappa")
+#kappa.x.array[:] = 1#dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
 F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
 a, L = ufl.system(F)
 
@@ -218,6 +220,12 @@ J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 control = pyadjoint.Control(f)
 Jhat = pyadjoint.ReducedFunctional(J, control)
 
+#Jhat.derivative()
+c = dolfinx_adjoint.Function(Q)
+c.interpolate(lambda x: x[0] + x[1])  # Set intial
+min_rate = pyadjoint.taylor_test(Jhat, f,c,)
+assert np.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
+exit()
 # Now that all ingredients are in place, we can perform the optimization.
 # For this, we employ the `moola.MoolaOptimizationProblem` to generate a problem that
 # is compatible with the Moola framework.

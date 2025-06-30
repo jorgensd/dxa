@@ -108,12 +108,4 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)
-        out = dolfinx.fem.petsc.LinearProblem.solve(self)
-        if annotate:
-            if isinstance(out, Function):
-                block.add_output(out.create_block_variable())
-            else:
-                for ui in out:
-                    assert isinstance(ui, Function)
-                    block.add_output(ui.create_block_variable())
-        return out
+        return dolfinx.fem.petsc.LinearProblem.solve(self)
