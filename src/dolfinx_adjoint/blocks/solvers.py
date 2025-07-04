@@ -336,7 +336,6 @@ class LinearProblemBlock(pyadjoint.Block):
             tlm_value = block_variable.tlm_value
             # c = block_variable.output
             c_rep = block_variable.saved_output
-            print(tlm_value)
             if tlm_value is None:
                 continue
 
