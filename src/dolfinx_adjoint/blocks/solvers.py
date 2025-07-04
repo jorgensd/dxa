@@ -456,17 +456,22 @@ class LinearProblemBlock(pyadjoint.Block):
         b_form = d2Fdu2 if d2Fdu2.empty() else ufl.action(ufl.adjoint(d2Fdu2), self._adjoint_solutions)
         for bo in self.get_dependencies():
             c = bo.output
+            c_rep = bo.saved_output
             tlm_input = bo.tlm_value
             if tlm_input is None:
                 continue
             if isinstance(c, (dolfinx.mesh.Mesh, dolfinx.fem.DirichletBC)):
                 raise NotImplementedError(f"Hessian computation for {type(c)} control not implemented yet.")
+            else:
+                dFdu_adj = ufl.action(ufl.adjoint(dFdu_form), self._adjoint_solutions)
+                b_form += ufl.derivative(dFdu_adj, c_rep, tlm_input)
 
         b = dolfinx.la.vector(hessian_inputs[0].index_map, hessian_inputs[0].block_size)
         b.array[:] = 0.0
-        if not b_form.empty():
+        if not ufl.algorithms.apply_derivatives.apply_derivatives(b_form).empty():
+
             compiled_soa_rhs = dolfinx.fem.form(
-                ufl.algorithms.expand_derivatives(b_form),
+                b_form,
                 jit_options=self._jit_options,
                 form_compiler_options=self._form_compiler_options,
                 entity_maps=self._entity_maps,
@@ -474,6 +479,7 @@ class LinearProblemBlock(pyadjoint.Block):
             dolfinx.fem.petsc.assemble_vector(b.petsc_vec, compiled_soa_rhs)
             b.array.scatter_reverse(dolfinx.la.InsertMode.ADD)
             b.array[:] *= -1
+ 
         b.array[:] += hessian_inputs[0].array
 
         # Compile SOA LHS
