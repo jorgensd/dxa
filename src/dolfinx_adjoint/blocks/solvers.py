@@ -174,7 +174,7 @@ class LinearProblemBlock(pyadjoint.Block):
 
         # Compute the derivative of the residual with respect to the inputs.
         tlm_rhs = input_tlm_derivative(_residual, self.get_dependencies(), self._block_to_coeff, self._tlm_map)
-
+        self._tlm_rhs = tlm_rhs
         self._tlm_solver = LinearHomogenizedProblem(
             dFdu_adjoint,
             tlm_rhs,
@@ -259,8 +259,15 @@ class LinearProblemBlock(pyadjoint.Block):
         assign_output_to_form(self.get_dependencies(), self._block_to_coeff)
         assign_tlm_value_to_form(self.get_dependencies(), self._tlm_map)
 
+        # Assemble into RHS vector
+        with self._tlm_solver.b.localForm() as b_tlm:
+            b_tlm.set(0.0)
+        dolfinx.fem.petsc.assemble_vector(self._tlm_solver.b, self._tlm_solver.L)
+        self._tlm_solver.b.ghostUpdate(
+            PETSc.InsertMode.ADD_VALUES, PETSc.ScatterMode.REVERSE)
+
+        # Solve TLM problem
         self._tlm_solver.solve()
-        breakpoint()
         return self._tlm_solver.u
 
     def prepare_evaluate_adj(
