@@ -85,7 +85,9 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             self, a, L, bcs, self._u, P, kind, petsc_options, form_compiler_options, jit_options, entity_maps
         )
 
-    def solve(self, annotate: bool = True) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
+    def solve(
+        self, annotate: bool = True
+    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
         """
         Solve the linear problem and return the solution.
         """
