@@ -60,7 +60,7 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
 
     def solve(
         self,
-    ) -> typing.tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
+    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
         """Solve the problem."""
 
         # Assemble lhs
