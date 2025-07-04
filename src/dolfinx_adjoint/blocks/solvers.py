@@ -211,7 +211,9 @@ class LinearProblemBlock(pyadjoint.Block):
         self, inputs: typing.Iterable[Function], block_variable, idx: int, prepared: None
     ) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
         """Recompute the block with the prepared linear problem."""
-        return self._forward_solver.solve()
+        solution, converged_reason, _ = self._forward_solver.solve()
+        assert converged_reason > 0
+        return solution
 
     def _should_compute_boundary_adjoint(
         self, relevant_dependencies: typing.List[tuple[int, pyadjoint.block_variable.BlockVariable]]

@@ -85,7 +85,9 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             self, a, L, bcs, self._u, P, kind, petsc_options, form_compiler_options, jit_options, entity_maps
         )
 
-    def solve(self, annotate: bool = True) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
+    def solve(
+        self, annotate: bool = True
+    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
         """
         Solve the linear problem and return the solution.
         """
@@ -108,7 +110,7 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)
-        out = dolfinx.fem.petsc.LinearProblem.solve(self)
+        out, converged_reason, num_its = dolfinx.fem.petsc.LinearProblem.solve(self)
         if annotate:
             if isinstance(out, Function):
                 block.add_output(out.create_block_variable())
@@ -116,4 +118,4 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
                 for ui in out:
                     assert isinstance(ui, Function)
                     block.add_output(ui.create_block_variable())
-        return out
+        return out, converged_reason, num_its

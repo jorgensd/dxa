@@ -58,7 +58,9 @@ def solve_linear_problem(
 class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
     """Linear problem helper class that homogenizes the boundary conditions, meaning that no lifting is applied."""
 
-    def solve(self) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
+    def solve(
+        self,
+    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
         """Solve the problem."""
 
         # Assemble lhs
@@ -84,4 +86,6 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
         self._solver.solve(self._b, self._x)
         dolfinx.la.petsc._ghost_update(self._x, PETSc.InsertMode.INSERT, PETSc.ScatterMode.FORWARD)  # type: ignore
         dolfinx.fem.petsc.assign(self._x, self._u)
-        return self._u
+        converged_reason = self._solver.getConvergedReason()
+        num_iterations = self._solver.getIterationNumber()
+        return self._u, converged_reason, num_iterations
