@@ -469,7 +469,6 @@ class LinearProblemBlock(pyadjoint.Block):
         b = dolfinx.la.vector(hessian_inputs[0].index_map, hessian_inputs[0].block_size)
         b.array[:] = 0.0
         if not ufl.algorithms.apply_derivatives.apply_derivatives(b_form).empty():
-
             compiled_soa_rhs = dolfinx.fem.form(
                 b_form,
                 jit_options=self._jit_options,
@@ -479,7 +478,7 @@ class LinearProblemBlock(pyadjoint.Block):
             dolfinx.fem.petsc.assemble_vector(b.petsc_vec, compiled_soa_rhs)
             b.array.scatter_reverse(dolfinx.la.InsertMode.ADD)
             b.array[:] *= -1
- 
+
         b.array[:] += hessian_inputs[0].array
 
         # Compile SOA LHS
