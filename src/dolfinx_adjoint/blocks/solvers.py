@@ -153,7 +153,6 @@ class LinearProblemBlock(pyadjoint.Block):
                     self.add_dependency(c, no_duplicates=True)
         except AttributeError:
             raise NotImplementedError("Blocked systems not implemented yet.")
-
         # Add output of the block
         if isinstance(self._u, Function):
             self.add_output(self._u.create_block_variable())
@@ -182,6 +181,8 @@ class LinearProblemBlock(pyadjoint.Block):
         self._bcs = bcs if bcs is not None else []
         # Solver for recomputing the linear problem
         placeholder_outputs = [self._block_to_coeff[block_variable] for block_variable in self.get_outputs()]
+        if len(placeholder_outputs) == 1:
+            placeholder_outputs = placeholder_outputs[0]
         self._forward_solver = dolfinx.fem.petsc.LinearProblem(
             _a,
             _L,
@@ -288,7 +289,8 @@ class LinearProblemBlock(pyadjoint.Block):
         self, inputs: typing.Iterable[Function], block_variable, idx: int, prepared: None
     ) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
         """Recompute the block with the prepared linear problem."""
-        return self._forward_solver.solve()
+        output, _, _ = self._forward_solver.solve()
+        return output
 
     def _should_compute_boundary_adjoint(
         self, relevant_dependencies: typing.List[tuple[int, pyadjoint.block_variable.BlockVariable]]
