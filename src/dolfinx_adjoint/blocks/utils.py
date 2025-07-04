@@ -4,6 +4,27 @@ from dolfinx_adjoint.types import Function
 import typing
 import dolfinx
 
+
+def block_action(form: typing.Union[ufl.Form, list[list[ufl.Form]]],vector: typing.Union[dolfinx.fem.Function, list[dolfinx.fem.Function]]) -> typing.Union[ufl.Form,
+                                                                                                                                                            list[ufl.Form]]:
+    """Compute the action of a form on a block variable.
+    
+    Args:
+        form: The UFL form to apply the action to.
+        block: The block variable to apply the action to.
+        block_to_func: A dictionary mapping block variables to their corresponding functions in the form.
+    """
+    assert isinstance(form, (ufl.Form, list)), "Form must be a UFL form or a list of UFL forms."
+    if isinstance(form, ufl.Form):
+        assert isinstance(vector, dolfinx.fem.Function)
+        return ufl.action(form, vector)
+    else:
+        output = []
+        for f_i in form:
+            output.append(ufl.action(f_ij, v_j) for f_ij, v_j in zip(f_i, vector))
+        return output
+    
+    
 def create_new_form(form: ufl.Form, dependencies: list[pyadjoint.Block], outputs: list[pyadjoint.block_variable.BlockVariable]) -> tuple[ufl.Form, dict[typing.Union[pyadjoint.Block], Function]]:
     """Replace coefficients in a variational form with placeholder variables,
         either if the variable is an input or output to the variational form.
@@ -38,7 +59,7 @@ def compute_adjoint(
     """
     Compute adjoint of a bilinear form :math:`a(u, v)`, which could be written as a blocked system.
     """
-    if isinstance(form, ufl.Form):
+    if isinstance(form, (ufl.Form, ufl.ZeroBaseForm)):
         return ufl.adjoint(form)
     else:
         assert isinstance(form, typing.Iterable)
@@ -142,7 +163,7 @@ def input_adj_derivative(F: typing.Union[ufl.Form, list[ufl.Form]], inputs: list
 
 def input_tlm_derivative(F: typing.Union[ufl.Form, list[ufl.Form]], inputs: list[pyadjoint.block_variable.BlockVariable],
                           block_to_func: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable], Function],
-                          tlm_to_func: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable], Function]
+                          block_to_tlm: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable], Function]
                           ) -> typing.Union[ufl.Form, list[ufl.Form]]:
     """Compute the derivative of the residual form with respect to its inputs applied to the tlm direction, i.e.
             :math:`\\left(\\frac{\\partial F_i}{\\partial m_j}\\right) t`,
@@ -152,7 +173,7 @@ def input_tlm_derivative(F: typing.Union[ufl.Form, list[ufl.Form]], inputs: list
         F: Residual or list of residaul forms to differentiate.
         inputs: List of block variables that are inputs to the calculation.
         block_to_func: A dictionary mapping block variables to their corresponding functions in the form.   
-        t: The tlm inputs
+        block_to_tlm: A dictionary mapping block variables to their corresponding TLM functions in the form.
     """
     if isinstance(F, ufl.Form):
         adj_sensitivity = ufl.ZeroBaseForm((F.arguments()[0],))
@@ -160,7 +181,7 @@ def input_tlm_derivative(F: typing.Union[ufl.Form, list[ufl.Form]], inputs: list
             c = block_to_func[block]
             dc = ufl.TrialFunction(c.function_space)
             dFdm = - ufl.derivative(F, c, dc)
-            form = ufl.action(dFdm, tlm_to_func[block])
+            form = ufl.action(dFdm, block_to_tlm[block])
             adj_sensitivity += form
 
     else:
@@ -170,9 +191,50 @@ def input_tlm_derivative(F: typing.Union[ufl.Form, list[ufl.Form]], inputs: list
             c = block_to_func[block]
             dc = ufl.TrialFunction(c.function_space)
             form = ufl.ZeroBaseForm((dc, ))
-            for F_i, tlm_i in zip(F, tlm_to_func[block], strict=True):
+            for F_i, tlm_i in zip(F, block_to_tlm[block], strict=True):
                 assert isinstance(F_i, list)
                 dFdm = - ufl.derivative(F_i, c, dc)
                 form += ufl.action(dFdm, tlm_i)    
             adj_sensitivity.append(form)
     return adj_sensitivity
+
+
+
+def output_soa_residual_double_derivative(
+    F: typing.Union[ufl.Form, list[ufl.Form]], outputs: list[pyadjoint.block_variable.BlockVariable],
+    block_to_func: dict[pyadjoint.Block, Function],
+    block_to_tlm: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable], dolfinx.fem.Function]) -> typing.Union[ufl.Form, list[list[ufl.Form]]]:
+    """Compute the second-order derivative of the form with respect to its outputs.
+    
+    Args:
+        F: The residual.
+        outputs: List of block variables that are outputs of the calculation.
+        block_to_func: A dictionary mapping block variables to their corresponding functions in the form.   
+        block_to_tlm: A dictionary mapping block variables to their corresponding TLM functions in the form.
+    """
+    if len(outputs) == 1:
+        assert isinstance(F, ufl.Form), "Form must be a single UFL form when there is only one output."
+        u = block_to_func[outputs[0]]
+        dFdu = ufl.derivative(F, u, ufl.TrialFunction(u.function_space))
+        d2Fdu2 = ufl.derivative(dFdu, u, block_to_tlm[outputs[0]])
+        # NOTE: Workaround until: https://github.com/FEniCS/ufl/pull/392 is merged
+        if ufl.algorithms.expand_derivatives(d2Fdu2).empty():
+            d2Fdu2 = ufl.ZeroBaseForm(d2Fdu2.arguments())
+    else:
+        assert len(F) == len(outputs), "Number of outputs must match the number of forms."
+        d2Fdu2 = []
+        u_s = [block_to_func[block] for block in outputs]
+        for Fi in F:
+            assert isinstance(Fi, list)
+            d2Fdu2.append([])
+            for u_j, b_j in zip(u_s, outputs, strict=True):
+                dFiduj = ufl.derivative(Fi, u_j, ufl.TrialFunction(u_j.function_space))
+                d2Fiduj2 = ufl.derivative(dFiduj, u_j, block_to_tlm[b_j])
+                if ufl.algorithms.expand_derivatives(d2Fiduj2).empty():
+                    d2Fiduj2 = ufl.ZeroBaseForm(d2Fiduj2.arguments())
+
+                d2Fdu2[-1].append(d2Fiduj2)
+    return compute_adjoint(d2Fdu2)
+
+
+

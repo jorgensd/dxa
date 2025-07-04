@@ -8,11 +8,12 @@ import numpy.typing as npt
 import pyadjoint
 import ufl
 
-from dolfinx_adjoint.petsc_utils import LinearHomogenizedProblem, solve_linear_problem
+from dolfinx_adjoint.petsc_utils import LinearHomogenizedProblem
 from dolfinx_adjoint.types import Function
 
 from .assembly import _create_vector, _SpecialVector, assemble_compiled_form
-from .utils import create_new_form, compute_adjoint, output_derivative, assign_output_to_form, input_adj_derivative, input_tlm_derivative, assign_tlm_value_to_form
+from .utils import (create_new_form, compute_adjoint, output_derivative, assign_output_to_form, input_adj_derivative, input_tlm_derivative, assign_tlm_value_to_form,
+                    output_soa_residual_double_derivative,block_action)
 
 
 
@@ -133,10 +134,20 @@ class LinearProblemBlock(pyadjoint.Block):
             # If output is a part of the form, we can replace it with the map, otherwise, we 
             _residual = ufl.action(_a, self._block_to_coeff[outputs[0]])  - _L
 
+        # Create map for TLM outputs
+        self._tlm_map: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable],dolfinx.fem.Function] = {}
+        for output in self.get_outputs():
+            V_i = output.output.function_space
+            self._tlm_map[output] = dolfinx.fem.Function(V_i, name=output.output.name + "_tlm_output")
+        for input in self.get_dependencies():
+            V_i = input.output.function_space
+            self._tlm_map[input] = dolfinx.fem.Function(V_i, name=input.output.name + "_tlm_input")
+
+
         # Prepare Adjoint and TLM solvers
         dFdu = output_derivative(_residual, self.get_outputs(), self._block_to_coeff)
 
-        # Adjoint values
+        # First adjoint
         dFdu_adjoint = compute_adjoint(dFdu)
         self._adjoint_solver = LinearHomogenizedProblem(
             dFdu_adjoint,
@@ -163,20 +174,20 @@ class LinearProblemBlock(pyadjoint.Block):
                                                        jit_options=self._jit_options,
                                                        form_compiler_options=self._form_compiler_options,entity_maps= self._entity_maps)
         
+        # Second adjoint
+        d2Fdu2_adj = output_soa_residual_double_derivative(_residual, self.get_outputs(), self._block_to_coeff,
+                                     self._tlm_map)
+        d2Fdu2_adj_act = block_action(d2Fdu2_adj, self._adjoint_solutions)
+
+
+
         # TLM 
-        self._tlm_map: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable],dolfinx.fem.Function] = {}
-        for output in self.get_outputs():
-            V_i = output.output.function_space
-            self._tlm_map[output] = dolfinx.fem.Function(V_i, name=output.output.name + "_tlm_output")
-        for input in self.get_dependencies():
-            V_i = input.output.function_space
-            self._tlm_map[input] = dolfinx.fem.Function(V_i, name=input.output.name + "_tlm_input")
 
         # Compute the derivative of the residual with respect to the inputs.
         tlm_rhs = input_tlm_derivative(_residual, self.get_dependencies(), self._block_to_coeff, self._tlm_map)
         self._tlm_rhs = tlm_rhs
         self._tlm_solver = LinearHomogenizedProblem(
-            dFdu_adjoint,
+            dFdu,
             tlm_rhs,
             bcs=self._bcs,
             P=self._preconditioner,
@@ -303,20 +314,30 @@ class LinearProblemBlock(pyadjoint.Block):
         """Evaluate the adjoint component, i.e. :math:`\frac{\\partial Au - b}{\\partial c}`."""
 
         # Get form and assign coefficients
-        sensitivty = self._first_adj_sensitivity[idx]
+        sensitivity = self._first_adj_sensitivity[idx]
         assign_output_to_form(self.get_dependencies(), self._block_to_coeff)
 
         # Compute assembly
-        vec = _create_vector(sensitivty)
-        assemble_compiled_form(sensitivty, tensor=vec)
+        vec = _create_vector(sensitivity)
+        assemble_compiled_form(sensitivity, tensor=vec)
         return vec
 
-    def prepare_evaluate_hessian(self, inputs, hessian_inputs, adj_inputs, relevant_dependencies):
+    def evaluate_hessian(self, markings:bool=False):
+
+        # Update coefficients with saved outputs
+        [block_variable.saved_output for block_variable in self.get_dependencies()]
+        assign_output_to_form(self.get_dependencies(), self._block_to_coeff)
+        assign_tlm_value_to_form(self.get_dependencies(), self._tlm_map)
+
+
+
         # First fetch all relevant values
-        outputs = self.get_outputs()
-        tlm_output = [output.tlm_value for output in outputs if output is not None]
-        if (hessian_inputs is None) or (len(tlm_output) == 0):
-            return
+        # outputs = self.get_outputs()
+        # tlm_output = [output.tlm_value for output in outputs if output is not None]
+        # if (hessian_inputs is None) or (len(tlm_output) == 0):
+        #     return
+
+
 
         # Using the equation Form we derive dF/du, d^2F/du^2 * du/dm * direction.
         dFdu_form = self._compute_residual_derivative()
@@ -366,90 +387,90 @@ class LinearProblemBlock(pyadjoint.Block):
         self._adjoint_solver.solve()
         return self._compute_residual(), self._adjoint_solutions, self._second_adjoint_solutions
 
-    def evaluate_hessian_component(
-        self,
-        inputs,
-        hessian_inputs,
-        adj_inputs,
-        block_variable,
-        idx,
-        relevant_dependencies,
-        prepared=None,
-    ):
-        c = block_variable.output
+    # def evaluate_hessian_component(
+    #     self,
+    #     inputs,
+    #     hessian_inputs,
+    #     adj_inputs,
+    #     block_variable,
+    #     idx,
+    #     relevant_dependencies,
+    #     prepared=None,
+    # ):
+    #     c = block_variable.output
 
-        F_form, adj_sol, adj_sol2 = prepared
+    #     F_form, adj_sol, adj_sol2 = prepared
 
-        outputs = self.get_outputs()
-        assert len(outputs) == 1, "Hessian computation only implemented for single output blocks."
-        tlm_output = outputs[0].tlm_value
+    #     outputs = self.get_outputs()
+    #     assert len(outputs) == 1, "Hessian computation only implemented for single output blocks."
+    #     tlm_output = outputs[0].tlm_value
 
-        c_rep = block_variable.saved_output
+    #     c_rep = block_variable.saved_output
 
-        # If m = DirichletBC then d^2F(u,m)/dm^2 = 0 and d^2F(u,m)/dudm = 0,
-        # so we only have the term dF(u,m)/dm * adj_sol2
-        if isinstance(c, dolfinx.fem.DirichletBC):
-            raise NotImplementedError("Hessian computation for DirichletBC control not implemented yet.")
+    #     # If m = DirichletBC then d^2F(u,m)/dm^2 = 0 and d^2F(u,m)/dudm = 0,
+    #     # so we only have the term dF(u,m)/dm * adj_sol2
+    #     if isinstance(c, dolfinx.fem.DirichletBC):
+    #         raise NotImplementedError("Hessian computation for DirichletBC control not implemented yet.")
 
-        if isinstance(c_rep, dolfinx.fem.Constant):
-            raise NotImplementedError("Hessian computation for Constant control not implemented yet.")
-            # mesh = extract_mesh_from_form(F_form)
-            # W = c._ad_function_space(mesh)
+    #     if isinstance(c_rep, dolfinx.fem.Constant):
+    #         raise NotImplementedError("Hessian computation for Constant control not implemented yet.")
+    #         # mesh = extract_mesh_from_form(F_form)
+    #         # W = c._ad_function_space(mesh)
 
-        elif isinstance(c, dolfinx.mesh.Mesh):
-            raise NotImplementedError("Hessian computation for Mesh control not implemented yet.")
-            # X = dolfin.SpatialCoordinate(c)
-            # W = c._ad_function_space()
-        else:
-            assert isinstance(c, dolfinx.fem.Function)
-            W = c.function_space
+    #     elif isinstance(c, dolfinx.mesh.Mesh):
+    #         raise NotImplementedError("Hessian computation for Mesh control not implemented yet.")
+    #         # X = dolfin.SpatialCoordinate(c)
+    #         # W = c._ad_function_space()
+    #     else:
+    #         assert isinstance(c, dolfinx.fem.Function)
+    #         W = c.function_space
 
-        dc = ufl.TestFunction(W)
-        form_adj = ufl.action(F_form, adj_sol)
-        form_adj2 = ufl.action(F_form, adj_sol2)
-        if isinstance(c, dolfinx.mesh.Mesh):
-            raise NotImplementedError("Hessian computation for Mesh control not implemented yet.")
-            # dFdm_adj = ufl.derivative(form_adj, X, dc)
-            # dFdm_adj2 = ufl.derivative(form_adj2, X, dc)
-        else:
-            # Assume Function
-            dFdm_adj = ufl.derivative(form_adj, c_rep, dc)
-            dFdm_adj2 = ufl.derivative(form_adj2, c_rep, dc)
+    #     dc = ufl.TestFunction(W)
+    #     form_adj = ufl.action(F_form, adj_sol)
+    #     form_adj2 = ufl.action(F_form, adj_sol2)
+    #     if isinstance(c, dolfinx.mesh.Mesh):
+    #         raise NotImplementedError("Hessian computation for Mesh control not implemented yet.")
+    #         # dFdm_adj = ufl.derivative(form_adj, X, dc)
+    #         # dFdm_adj2 = ufl.derivative(form_adj2, X, dc)
+    #     else:
+    #         # Assume Function
+    #         dFdm_adj = ufl.derivative(form_adj, c_rep, dc)
+    #         dFdm_adj2 = ufl.derivative(form_adj2, c_rep, dc)
 
-        # TODO: Old comment claims this might break on split. Confirm if true or not.
-        d2Fdudm = ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, outputs[0].saved_output, tlm_output))
+    #     # TODO: Old comment claims this might break on split. Confirm if true or not.
+    #     d2Fdudm = ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, outputs[0].saved_output, tlm_output))
 
-        d2Fdm2 = 0
-        # We need to add terms from every other dependency
-        # i.e. the terms d^2F/dm_1dm_2
-        for _, bv in relevant_dependencies:
-            c2 = bv.output
-            c2_rep = bv.saved_output
+    #     d2Fdm2 = 0
+    #     # We need to add terms from every other dependency
+    #     # i.e. the terms d^2F/dm_1dm_2
+    #     for _, bv in relevant_dependencies:
+    #         c2 = bv.output
+    #         c2_rep = bv.saved_output
 
-            if isinstance(c2, dolfinx.fem.DirichletBC):
-                continue
-            tlm_input = bv.tlm_value
-            if tlm_input is None:
-                continue
+    #         if isinstance(c2, dolfinx.fem.DirichletBC):
+    #             continue
+    #         tlm_input = bv.tlm_value
+    #         if tlm_input is None:
+    #             continue
 
-            if c2 == self._u and not self.linear:
-                continue
+    #         if c2 == self._u and not self.linear:
+    #             continue
 
-            # TODO: If tlm_input is a Sum, this crashes in some instances?
-            if isinstance(c2_rep, dolfinx.mesh.Mesh):
-                X = ufl.SpatialCoordinate(c2_rep)
-                d2Fdm2 += ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, X, tlm_input))
-            else:
-                d2Fdm2 += ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, c2_rep, tlm_input))
+    #         # TODO: If tlm_input is a Sum, this crashes in some instances?
+    #         if isinstance(c2_rep, dolfinx.mesh.Mesh):
+    #             X = ufl.SpatialCoordinate(c2_rep)
+    #             d2Fdm2 += ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, X, tlm_input))
+    #         else:
+    #             d2Fdm2 += ufl.algorithms.expand_derivatives(ufl.derivative(dFdm_adj, c2_rep, tlm_input))
 
-        hessian_form = ufl.algorithms.expand_derivatives(d2Fdm2 + dFdm_adj2 + d2Fdudm)
+    #     hessian_form = ufl.algorithms.expand_derivatives(d2Fdm2 + dFdm_adj2 + d2Fdudm)
 
-        compiled_hessian = dolfinx.fem.form(
-            hessian_form,
-            jit_options=self._jit_options,
-            form_compiler_options=self._form_compiler_options,
-            entity_maps=self._entity_maps,
-        )
-        hessian_output = assemble_compiled_form(compiled_hessian)
-        hessian_output.array[:] *= -1.0
-        return hessian_output
+    #     compiled_hessian = dolfinx.fem.form(
+    #         hessian_form,
+    #         jit_options=self._jit_options,
+    #         form_compiler_options=self._form_compiler_options,
+    #         entity_maps=self._entity_maps,
+    #     )
+    #     hessian_output = assemble_compiled_form(compiled_hessian)
+    #     hessian_output.array[:] *= -1.0
+    #     return hessian_output
