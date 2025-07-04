@@ -57,7 +57,7 @@ import moola
 import numpy as np
 import pandas
 import pyadjoint
-import pyvista
+#import pyvista
 import ufl
 from moola.adaptors import DolfinxPrimalVector  # noqa: E402
 
@@ -68,9 +68,9 @@ import dolfinx_adjoint
 # We configure Pyvista for rendering
 
 # + tags=["hide-input"]
-pyvista.set_jupyter_backend("html")
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
+#pyvista.set_jupyter_backend("html")
+#if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
+#    pyvista.start_xvfb(0.05)
 # -
 
 # + [markdown]
@@ -109,11 +109,11 @@ del mesh
 
 # +
 
-grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
-plotter = pyvista.Plotter()
-plotter.add_mesh(grid, show_edges=True, color="lightgrey")
-plotter.view_xy()
-plotter.show()
+# grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
+# plotter = pyvista.Plotter()
+# plotter.add_mesh(grid, show_edges=True, color="lightgrey")
+# plotter.view_xy()
+# plotter.show()
 # -
 
 # Then we define the discrete function spaces $V$ and $Q$ for the state and control variable, respectively
@@ -140,9 +140,9 @@ uh = dolfinx_adjoint.Function(V, name="State")
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
-#kappa = dolfinx_adjoint.Function(V, name="kappa")
-#kappa.x.array[:] = 1#dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+#kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+kappa = dolfinx_adjoint.Function(V, name="kappa")
+kappa.x.array[:] = 1#dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
 F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
 a, L = ufl.system(F)
 
@@ -220,11 +220,25 @@ J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 control = pyadjoint.Control(f)
 Jhat = pyadjoint.ReducedFunctional(J, control)
 
+g = dolfinx_adjoint.Function(f.function_space, name="Gradient")
 #Jhat.derivative()
 c = dolfinx_adjoint.Function(Q)
 c.interpolate(lambda x: x[0] + x[1])  # Set intial
 min_rate = pyadjoint.taylor_test(Jhat, f,c,)
 assert np.isclose(min_rate, 2.0, rtol=1e-2, atol=1e-2), f"Expected convergence rate close to 2.0, got {min_rate}"
+
+
+
+Jh = Jhat(f)
+df = dolfinx_adjoint.Function(Q)
+df.x.array[:] = 0.1
+dJdm = Jhat.derivative()._ad_dot(df)
+hessian = Jhat.hessian(df)
+dHddu = hessian._ad_dot(df)
+
+
+
+
 exit()
 # Now that all ingredients are in place, we can perform the optimization.
 # For this, we employ the `moola.MoolaOptimizationProblem` to generate a problem that

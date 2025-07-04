@@ -238,10 +238,9 @@ class AssembleBlock(Block):
         for block_variable in self.get_dependencies():
             coeff = block_variable.output
             c_rep = block_variable.saved_output
+            print(block_variable.output.name, c_rep)
             if coeff in self.form.coefficients():
                 replaced_coeffs[coeff] = c_rep
-                print(c_rep)
-        breakpoint()
         form = ufl.replace(self.form, replaced_coeffs)
         return form
 

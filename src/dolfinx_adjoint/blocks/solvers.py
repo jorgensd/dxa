@@ -8,95 +8,11 @@ import numpy.typing as npt
 import pyadjoint
 import ufl
 
-from dolfinx_adjoint.petsc_utils import LinearAdjointProblem, solve_linear_problem
+from dolfinx_adjoint.petsc_utils import LinearHomogenizedProblem, solve_linear_problem
 from dolfinx_adjoint.types import Function
 
 from .assembly import _create_vector, _SpecialVector, assemble_compiled_form
-
-def create_new_form(form: ufl.Form, dependencies: list[pyadjoint.Block], outputs: list[pyadjoint.block_variable.BlockVariable]) -> tuple[ufl.Form, dict[typing.Union[pyadjoint.Block], Function]]:
-    """Replace coefficients in a variational form with placeholder variables,
-        either if the variable is an input or output to the variational form.
-    
-    Args:
-        form: The UFL form to replace coefficients in.
-        dependencies: List of blocks that contain the dependencies to replace.
-        outputs: List of block variables that are outputs of the calculaton.
-    Returns:
-        The new UFL form and a dictionary mapping each block variable to the coefficient
-        that replaces its output in the form.
-    """
-    replace_map: dict[Function, Function] = {}
-    block_to_coeff: dict[pyadjoint.Block, Function] = {}
-    for block in dependencies:
-        if (coeff:=block.output) in form.coefficients():
-            replace_map[coeff] = Function(coeff.function_space, name=coeff.name + "_placeholder")
-            block_to_coeff[block] = replace_map[coeff]
-
-    for block_variable in outputs:
-        # Create replacement function even if coeff is not in form, as it is used for residual computation.
-        if (coeff:=block_variable.output) not in replace_map.keys():
-            replace_map[coeff] = Function(coeff.function_space, name=coeff.name + "_placeholder")
-        block_to_coeff[block_variable] = replace_map[coeff]
-        
-    return ufl.replace(form, replace_map), block_to_coeff
-
-
-def _compute_adjoint(
-    form: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]
-) -> typing.Union[ufl.Form, typing.Sequence[typing.Iterable[ufl.Form]]]:
-    """
-    Compute adjoint of a bilinear form :math:`a(u, v)`, which could be written as a blocked system.
-    """
-    if isinstance(form, ufl.Form):
-        return ufl.adjoint(form)
-    else:
-        assert isinstance(form, typing.Iterable)
-        adj_form: list[list[ufl.Form]] = []
-        tmp_form: list[list[ufl.Form]] = []
-        for i, f_i in enumerate(form):
-            tmp_form.append([])
-            adj_form.append([])
-            for j, form_ij in enumerate(f_i):
-                tmp_form[i].append(ufl.adjoint(form_ij))
-                adj_form[i].append(ufl.adjoint(form_ij))
-        for i, f_i in enumerate(tmp_form):
-            for j, form_ij in enumerate(f_i):
-                adj_form[j][i] = form_ij
-        return adj_form
-
-def assign_output_to_form(
-    blocks: list[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable]],
-                 block_to_coeff: dict[pyadjoint.Block, Function]):
-    """Assign the `saved_output` of a block variable to the coefficients in a form."""
-    for block_variable in blocks:
-        form_coeff = block_to_coeff[block_variable]
-        form_coeff.x.array[:] = block_variable.saved_output.x.array
-
-
-def _differentiate(form: typing.Union[ufl.Form, list[ufl.Form]], outputs: list[pyadjoint.block_variable.BlockVariable],
-                   block_to_func) -> typing.Union[ufl.Form, list[list[ufl.Form]]]:
-    """Compute the derivative of the form with respect to its outputs.
-    
-    Args:
-        form: The UFL form to differentiate.
-        outputs: List of block variables that are outputs of the calculation.
-        block_to_func: A dictionary mapping block variables to their corresponding functions in the form.   
-    """
-    if len(outputs) == 1:
-        assert isinstance(form, ufl.Form), "Form must be a single UFL form when there is only one output."
-        u = block_to_func[outputs[0]]
-        dFdu = ufl.derivative(form, u, ufl.TrialFunction(u.function_space))
-    else:
-        assert len(form) == len(outputs), "Number of outputs must match the number of forms."
-        dFdu = []
-        u_s = [block_to_func[block] for block in outputs]
-        for i, block in enumerate(outputs):
-            u = block_to_func[block]
-            assert isinstance(form[i], list)
-            dFdu.append([])
-            for j in range(len(outputs)):
-                dFdu[-1].append(ufl.derivative(form[i], outputs[j], ufl.TrialFunction(u_s[j].function_space)))
-    return dFdu
+from .utils import create_new_form, compute_adjoint, output_derivative, assign_output_to_form, input_adj_derivative, input_tlm_derivative, assign_tlm_value_to_form
 
 
 
@@ -160,7 +76,8 @@ class LinearProblemBlock(pyadjoint.Block):
             for ui in self._u:
                 assert isinstance(ui, Function)
                 self.add_output(ui.create_block_variable())
-
+                # NOTE: Check that marked_in_path works
+    
         # Replace coefficients in the form with placeholder variables.
         F, self._block_to_coeff = create_new_form(a-L, self.get_dependencies(), self.get_outputs())
         _a, _L = ufl.system(F)
@@ -216,8 +133,12 @@ class LinearProblemBlock(pyadjoint.Block):
             # If output is a part of the form, we can replace it with the map, otherwise, we 
             _residual = ufl.action(_a, self._block_to_coeff[outputs[0]])  - _L
 
-        dFdu_adjoint = _compute_adjoint(_differentiate(_residual, self.get_outputs(), self._block_to_coeff))
-        self._adjoint_solver = LinearAdjointProblem(
+        # Prepare Adjoint and TLM solvers
+        dFdu = output_derivative(_residual, self.get_outputs(), self._block_to_coeff)
+
+        # Adjoint values
+        dFdu_adjoint = compute_adjoint(dFdu)
+        self._adjoint_solver = LinearHomogenizedProblem(
             dFdu_adjoint,
             _L,
             bcs=self._bcs,
@@ -237,21 +158,35 @@ class LinearProblemBlock(pyadjoint.Block):
         )
 
         # Compute the derivative of the residual with respect to the inputs.
-        self._first_adj_sensitivity = []
-        for block  in self.get_dependencies():
-            c = self._block_to_coeff[block]
-            dc = ufl.TrialFunction(c.function_space)
-            dFdm = -ufl.derivative(_residual, c, dc)
-            dFdm_adj = ufl.adjoint(dFdm)
-            sensitivity = ufl.action(dFdm_adj, self._adjoint_solutions)
-            self._first_adj_sensitivity.append(dolfinx.fem.form(
-                sensitivity,
-                jit_options=self._jit_options,
-                form_compiler_options=self._form_compiler_options,
-                entity_maps=self._entity_maps,
-                ))
+        first_adj_sensitivity = input_adj_derivative(_residual, self.get_dependencies(), self._block_to_coeff, self._adjoint_solutions)
+        self._first_adj_sensitivity = dolfinx.fem.form(first_adj_sensitivity,
+                                                       jit_options=self._jit_options,
+                                                       form_compiler_options=self._form_compiler_options,entity_maps= self._entity_maps)
+        
+        # TLM 
+        self._tlm_map: dict[typing.Union[pyadjoint.Block, pyadjoint.block_variable.BlockVariable],dolfinx.fem.Function] = {}
+        for output in self.get_outputs():
+            V_i = output.output.function_space
+            self._tlm_map[output] = dolfinx.fem.Function(V_i, name=output.output.name + "_tlm_output")
+        for input in self.get_dependencies():
+            V_i = input.output.function_space
+            self._tlm_map[input] = dolfinx.fem.Function(V_i, name=input.output.name + "_tlm_input")
 
+        # Compute the derivative of the residual with respect to the inputs.
+        tlm_rhs = input_tlm_derivative(_residual, self.get_dependencies(), self._block_to_coeff, self._tlm_map)
 
+        self._tlm_solver = LinearHomogenizedProblem(
+            dFdu_adjoint,
+            tlm_rhs,
+            bcs=self._bcs,
+            P=self._preconditioner,
+            form_compiler_options=self._form_compiler_options,
+            jit_options=self._jit_options,
+            petsc_options=self._tlm_petsc_options,
+            kind=kind,
+            entity_maps=self._entity_maps,
+        )
+    
     def _recover_bcs(self):
         bcs = []
         for block_variable in self.get_dependencies():
@@ -303,22 +238,7 @@ class LinearProblemBlock(pyadjoint.Block):
                 break
         return bdy
 
-
-
-
-    def prepare_evaluate_tlm(
-        self, inputs, tlm_inputs, relevant_outputs
-    ) -> tuple[typing.Union[list[ufl.Form], ufl.Form], dolfinx.fem.Form]:
-        F_form = self._compute_residual()
-        dFdu_compiled = dolfinx.fem.form(
-            self._compute_residual_derivative(),  # type: ignore[arg-type]
-            jit_options=self._jit_options,
-            form_compiler_options=self._form_compiler_options,
-            entity_maps=self._entity_maps,
-        )
-        return F_form, dFdu_compiled
-
-    def evaluate_tlm_component(self, inputs, tlm_inputs, block_variable, idx, prepared=None) -> dolfinx.fem.Function:
+    def evaluate_tlm(self, markings:bool=False) -> dolfinx.fem.Function:
         """Solve the TLM equation for the block variable.
 
         .. math::
@@ -326,53 +246,22 @@ class LinearProblemBlock(pyadjoint.Block):
             \frac{\\partial F}{\\partial u} \frac{\\partial u}{\\partial m} = \frac{\\partial F}{\\partial m}
 
         """
-        # FIXME: Think about blocks later
-        F, dFdu = prepared
-
-        V = self.get_outputs()[idx].output.function_space
-
+        outputs = self.get_outputs()
+        assert len(outputs) == 1
+        V = outputs[0].output.function_space
         # FIXME: DirichletBC not block variable yet. Required later on. Currently all bcs should be homogenized
         bcs = []
         for bc in self._bcs:
             bcs.append(bc)
-        dFdm = ufl.ZeroBaseForm((ufl.TestFunction(V),))
-        for block_variable in self.get_dependencies():
-            tlm_value = block_variable.tlm_value
-            # c = block_variable.output
-            c_rep = block_variable.saved_output
-            if tlm_value is None:
-                continue
 
-            dFdm += ufl.derivative(-F, c_rep, tlm_value)
+        # Update coefficients with saved outputs
+        [block_variable.saved_output for block_variable in self.get_dependencies()]
+        assign_output_to_form(self.get_dependencies(), self._block_to_coeff)
+        assign_tlm_value_to_form(self.get_dependencies(), self._tlm_map)
 
-        if isinstance(dFdm, float):
-            v = dFdu.arguments()[0]
-            dFdm = ufl.ZeroBaseForm((v,))
-
-        dFdm = ufl.algorithms.expand_derivatives(dFdm)
-        dFdm_compiled = dolfinx.fem.form(
-            dFdm,
-            jit_options=self._jit_options,
-            form_compiler_options=self._form_compiler_options,
-            entity_maps=self._entity_maps,
-        )
-        dudm = dolfinx.fem.Function(V, name="du_dm_tlm_linearblock")
-        A_tlm = dolfinx.fem.petsc.assemble_matrix(dFdu, bcs=bcs)
-        A_tlm.assemble()
-        b_tlm = dolfinx.fem.create_vector(dFdm_compiled)
-        b_tlm.array[:] = 0.0
-        dolfinx.fem.petsc.assemble_vector(b_tlm.petsc_vec, dFdm_compiled)
-
-        if bcs is not None:
-            # This system should never be "blocked"
-            dolfinx.fem.petsc.apply_lifting(b_tlm.petsc_vec, [dFdu], bcs=[bcs], alpha=0)
-            dolfinx.la.petsc._ghost_update(b_tlm.petsc_vec, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)  # type: ignore [attr-defined]
-            for bc in bcs:
-                bc.set(b_tlm.array, alpha=0)
-        else:
-            dolfinx.la.petsc._ghost_update(b_tlm, PETSc.InsertMode.ADD, PETSc.ScatterMode.REVERSE)  # type: ignore [attr-defined]
-        solve_linear_problem(A_tlm, dudm.x, b_tlm, petsc_options=self._tlm_petsc_options)
-        return dudm
+        self._tlm_solver.solve()
+        breakpoint()
+        return self._tlm_solver.u
 
     def prepare_evaluate_adj(
         self,

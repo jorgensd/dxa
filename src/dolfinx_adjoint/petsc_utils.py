@@ -55,7 +55,7 @@ def solve_linear_problem(
     x.scatter_forward()
 
 
-class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
+class LinearHomogenizedProblem(dolfinx.fem.petsc.LinearProblem):
     """Linear problem helper class that homogenizes the boundary conditions, meaning that no lifting is applied."""
 
     def solve(self) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
