@@ -3,8 +3,6 @@ import typing
 from petsc4py import PETSc
 
 import dolfinx.fem.petsc
-import numpy as np
-import numpy.typing as npt
 import pyadjoint
 import ufl
 

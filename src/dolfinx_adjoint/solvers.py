@@ -4,8 +4,6 @@ except ModuleNotFoundError:
     import typing  # type: ignore[no-redef]
 
 import dolfinx.fem.petsc
-import numpy as np
-import numpy.typing as npt
 import pyadjoint
 import ufl
 
