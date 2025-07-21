@@ -32,6 +32,7 @@ class LinearProblemBlock(pyadjoint.Block):
         P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
         kind: typing.Optional[typing.Union[str, typing.Iterable[typing.Iterable[str]]]] = None,
         petsc_options: typing.Optional[dict] = None,
+        petsc_options_prefix: str = "dxa_linear_problem_block_",
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
         entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
@@ -85,15 +86,17 @@ class LinearProblemBlock(pyadjoint.Block):
         self._form_compiler_options = form_compiler_options
         self._entity_maps = entity_maps
         self._petsc_options = petsc_options if petsc_options is not None else {}
+        self._petsc_options_prefix = petsc_options_prefix
         self._bcs = bcs if bcs is not None else []
         # Solver for recomputing the linear problem
         self._forward_solver = dolfinx.fem.petsc.LinearProblem(
-            self._lhs,
-            self._rhs,
+            a=self._lhs,
+            L=self._rhs,
             bcs=self._bcs,
             u=self._u,
             P=self._preconditioner,
             petsc_options=self._petsc_options,
+            petsc_options_prefix=petsc_options_prefix,
             form_compiler_options=self._form_compiler_options,
             jit_options=self._jit_options,
             kind=kind,
@@ -118,6 +121,7 @@ class LinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             jit_options=self._jit_options,
             petsc_options=self._adjoint_petsc_options,
+            petsc_options_prefix=self._petsc_options_prefix,
             kind=kind,
             entity_maps=self._entity_maps,
         )
@@ -211,8 +215,7 @@ class LinearProblemBlock(pyadjoint.Block):
         self, inputs: typing.Iterable[Function], block_variable, idx: int, prepared: None
     ) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
         """Recompute the block with the prepared linear problem."""
-        solution, converged_reason, _ = self._forward_solver.solve()
-        assert converged_reason > 0
+        solution = self._forward_solver.solve()
         return solution
 
     def _should_compute_boundary_adjoint(

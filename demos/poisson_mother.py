@@ -113,7 +113,10 @@ grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
 plotter = pyvista.Plotter()
 plotter.add_mesh(grid, show_edges=True, color="lightgrey")
 plotter.view_xy()
-plotter.show()
+if pyvista.OFF_SCREEN:
+    plotter.screenshot("poisson_mother_mesh.png")
+else:
+    plotter.show()
 # -
 
 # Then we define the discrete function spaces $V$ and $Q$ for the state and control variable, respectively
@@ -200,8 +203,8 @@ J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(
 J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 
 # The next step is to formulate the so-called reduced optimization problem.
-# The idea is that the solution $u$ cna be considered as a functin of $f$:
-# given a value of $f$, we can solve the Poisson equation and obtain the associated solution $uh$.
+# The idea is that the solution $u$ can be considered as a functin of $f$:
+# given a value of $f$, we can solve the Poisson equation and obtain the associated solution $u_h$.
 # Bu denoting this solution function as $u(f)$ we can rewrite the original optimization problem as a reduced problem:
 
 # $$
@@ -306,7 +309,10 @@ warped_f_ex = plotting_grid.warp_by_scalar("f_exact", factor=scale_factor)
 plotter.add_mesh(warped_f_ex, scalars="f_exact", show_edges=True)
 plotter.link_views((0, 1))
 plotter.link_views((2, 3))
-plotter.show()
+if pyvista.OFF_SCREEN:
+    plotter.screenshot("poisson_mother.png")
+else:
+    plotter.show()
 # -
 
 # ## Convergence analysis (mesh independence)
@@ -424,7 +430,8 @@ results_bfgs = []
 for N in [16, 32, 64, 128]:
     results_bfgs.append(solve_optimal_problem(N, use_newton=False))
 
-pandas.DataFrame(results_bfgs)
+bfgs_results = pandas.DataFrame(results_bfgs)
+bfgs_results
 
 # We observe that the number of iterations is independent of the mesh resolution, and that the errors in the
 # state and control goes down with a rate of 1.

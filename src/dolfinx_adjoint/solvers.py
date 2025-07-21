@@ -45,6 +45,7 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
         kind: typing.Optional[typing.Union[str, typing.Iterable[typing.Iterable[str]]]] = None,
         petsc_options: typing.Optional[dict] = None,
+        petsc_options_prefix: str = "dxa_linear_problem_",
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
         entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
@@ -81,8 +82,18 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         self._kind = kind
 
         # Initialize linear solver
-        dolfinx.fem.petsc.LinearProblem.__init__(
-            self, a, L, bcs, self._u, P, kind, petsc_options, form_compiler_options, jit_options, entity_maps
+        super().__init__(
+            a=a,
+            L=L,
+            bcs=bcs,
+            u=self._u,
+            P=P,
+            kind=kind,
+            petsc_options_prefix=petsc_options_prefix,
+            petsc_options=petsc_options,
+            form_compiler_options=form_compiler_options,
+            jit_options=jit_options,
+            entity_maps=entity_maps,
         )
 
     def solve(
@@ -110,7 +121,8 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)
-        out, converged_reason, num_its = dolfinx.fem.petsc.LinearProblem.solve(self)
+
+        out = dolfinx.fem.petsc.LinearProblem.solve(self)
         if annotate:
             if isinstance(out, Function):
                 block.add_output(out.create_block_variable())
@@ -118,4 +130,4 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
                 for ui in out:
                     assert isinstance(ui, Function)
                     block.add_output(ui.create_block_variable())
-        return out, converged_reason, num_its
+        return out
