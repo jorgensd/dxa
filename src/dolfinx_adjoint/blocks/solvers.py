@@ -20,22 +20,22 @@ class LinearProblemBlock(pyadjoint.Block):
     This class extends the `dolfinx.fem.petsc.LinearProblem` to support adjoint methods.
     """
 
-    _adjoint_solutions: typing.Union[Function, typing.Iterable[Function]]
-    _second_adjoint_solutions: typing.Union[Function, typing.Iterable[Function]]
+    _adjoint_solutions: typing.Union[Function, typing.Sequence[Function]]
+    _second_adjoint_solutions: typing.Union[Function, typing.Sequence[Function]]
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
-        bcs: typing.Optional[typing.Iterable[dolfinx.fem.DirichletBC]] = None,
-        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]] = None,
-        P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
-        kind: typing.Optional[typing.Union[str, typing.Iterable[typing.Iterable[str]]]] = None,
+        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
+        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        bcs: typing.Optional[typing.Sequence[dolfinx.fem.DirichletBC]] = None,
+        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]] = None,
+        P: typing.Optional[typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]] = None,
+        kind: typing.Optional[typing.Union[str, typing.Sequence[typing.Sequence[str]]]] = None,
         petsc_options: typing.Optional[dict] = None,
         petsc_options_prefix: str = "dxa_linear_problem_block_",
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
-        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
+        entity_maps: typing.Optional[typing.Sequence[dolfinx.mesh.EntityMap]] = None,
         ad_block_tag: typing.Optional[str] = None,
         adjoint_petsc_options: typing.Optional[dict] = None,
         tlm_petsc_options: typing.Optional[dict] = None,
@@ -106,8 +106,8 @@ class LinearProblemBlock(pyadjoint.Block):
         self._kind = "nest" if self._forward_solver.A.getType() == "nest" else kind
 
         if isinstance(self._u, dolfinx.fem.Function):
-            self._adjoint_solutions = self._u.copy()
-            self._second_adjoint_solutions = self._u.copy()
+            self._adjoint_solutions = self._u.copy()  # type: ignore[assignment]
+            self._second_adjoint_solutions = self._u.copy()  # type: ignore[assignment]
         else:
             assert isinstance(self._u, typing.Iterable)
             self._adjoint_solutions = [u.copy() for u in self._u]
@@ -231,8 +231,8 @@ class LinearProblemBlock(pyadjoint.Block):
 
     @classmethod
     def _compute_adjoint(
-        cls, form: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]
-    ) -> typing.Union[ufl.Form, typing.Sequence[typing.Iterable[ufl.Form]]]:
+        cls, form: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]
+    ) -> typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]:
         """
         Compute adjoint of a bilinear form :math:`a(u, v)`, which could be written as a blocked system.
         """

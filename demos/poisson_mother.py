@@ -112,7 +112,7 @@ del mesh
 grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(refined_mesh))
 plotter = pyvista.Plotter()
 plotter.add_mesh(grid, show_edges=True, color="lightgrey")
-plotter.view_xy()
+plotter.view_xy(plotter)
 if pyvista.OFF_SCREEN:
     plotter.screenshot("poisson_mother_mesh.png")
 else:

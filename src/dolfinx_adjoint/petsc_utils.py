@@ -60,7 +60,7 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
 
     def solve(
         self,
-    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
+    ) -> typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]:
         """Solve the problem."""
 
         # Assemble lhs
@@ -86,6 +86,4 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
         self._solver.solve(self._b, self._x)
         dolfinx.la.petsc._ghost_update(self._x, PETSc.InsertMode.INSERT, PETSc.ScatterMode.FORWARD)  # type: ignore
         dolfinx.fem.petsc.assign(self._x, self._u)
-        converged_reason = self._solver.getConvergedReason()
-        num_iterations = self._solver.getIterationNumber()
-        return self._u, converged_reason, num_iterations
+        return self._u

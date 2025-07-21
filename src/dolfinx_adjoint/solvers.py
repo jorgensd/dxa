@@ -38,17 +38,17 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
-        bcs: typing.Optional[typing.Iterable[dolfinx.fem.DirichletBC]] = None,
-        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]] = None,
-        P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
-        kind: typing.Optional[typing.Union[str, typing.Iterable[typing.Iterable[str]]]] = None,
+        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
+        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        bcs: typing.Optional[typing.Sequence[dolfinx.fem.DirichletBC]] = None,
+        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]] = None,
+        P: typing.Optional[typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]] = None,
+        kind: typing.Optional[typing.Union[str, typing.Sequence[typing.Sequence[str]]]] = None,
         petsc_options: typing.Optional[dict] = None,
         petsc_options_prefix: str = "dxa_linear_problem_",
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
-        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
+        entity_maps: typing.Optional[typing.Sequence[dolfinx.mesh.EntityMap]] = None,
         ad_block_tag: typing.Optional[str] = None,
         adjoint_petsc_options: typing.Optional[dict] = None,
         tlm_petsc_options: typing.Optional[dict] = None,
@@ -96,9 +96,7 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             entity_maps=entity_maps,
         )
 
-    def solve(
-        self, annotate: bool = True
-    ) -> typing.Tuple[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]], int, int]:
+    def solve(self, annotate: bool = True) -> typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]:
         """
         Solve the linear problem and return the solution.
         """
