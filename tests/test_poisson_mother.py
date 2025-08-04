@@ -80,19 +80,25 @@ def reference_solution(
         "pc_factor_mat_solver_type": "mumps",
         "ksp_error_if_not_converged": True,
     }
-    forward_problem = dolfinx.fem.petsc.LinearProblem(a, L, u=uh, petsc_options=petsc_options, bcs=[bc])
+    forward_problem = dolfinx.fem.petsc.LinearProblem(
+        a, L, u=uh, petsc_options=petsc_options, petsc_options_prefix="forward_problem_", bcs=[bc]
+    )
     forward_problem.solve()
 
     # Solve TLM
     a_tlm = dFdu
     L_tlm = -ufl.action(dFdm, dm)
-    problem_tlm = dolfinx.fem.petsc.LinearProblem(a_tlm, L_tlm, u=u_dot, petsc_options=petsc_options, bcs=[bc])
+    problem_tlm = dolfinx.fem.petsc.LinearProblem(
+        a_tlm, L_tlm, u=u_dot, petsc_options=petsc_options, petsc_options_prefix="tlm_problem_", bcs=[bc]
+    )
     problem_tlm.solve()
 
     # Solve adjoint problem
     a_adj = ufl.adjoint(dFdu)
     L_adj = dJdu
-    problem_adj = dolfinx.fem.petsc.LinearProblem(a_adj, L_adj, u=lmbda, petsc_options=petsc_options, bcs=[bc])
+    problem_adj = dolfinx.fem.petsc.LinearProblem(
+        a_adj, L_adj, u=lmbda, petsc_options=petsc_options, petsc_options_prefix="adjoint_problem_", bcs=[bc]
+    )
     problem_adj.solve()
 
     # Solve second order adjoint problem
@@ -102,7 +108,9 @@ def reference_solution(
     # + ufl.action(ufl.adjoint(d2Jdmdu), dm)
     # - ufl.action(ufl.action(ufl.adjoint(d2Fdudu), u_dot), lmbda)
     # - ufl.action(ufl.adjoint(ufl.action(d2Fdmdm,dm)),lmbda)
-    problem_soa = dolfinx.fem.petsc.LinearProblem(a_soa, L_soa, u=lmbda_dot, petsc_options=petsc_options, bcs=[bc])
+    problem_soa = dolfinx.fem.petsc.LinearProblem(
+        a_soa, L_soa, u=lmbda_dot, petsc_options=petsc_options, petsc_options_prefix="soa_problem_", bcs=[bc]
+    )
     problem_soa.solve()
 
     # [delta m]^T  d^2 J / dm^2 [delta m]
