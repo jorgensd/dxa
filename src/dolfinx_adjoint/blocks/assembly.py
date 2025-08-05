@@ -81,7 +81,7 @@ def assemble_compiled_form(
     """
 
     if form.rank == 1:
-        tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
+        tensor = _create_vector(form) if tensor is None else tensor
         assert isinstance(tensor, dolfinx.la.Vector)
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
