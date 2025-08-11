@@ -81,7 +81,7 @@ def assemble_compiled_form(
     """
 
     if form.rank == 1:
-        tensor = dolfinx.fem.create_vector(form) if tensor is None else tensor
+        tensor = _create_vector(form) if tensor is None else tensor
         assert isinstance(tensor, dolfinx.la.Vector)
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
@@ -113,7 +113,7 @@ class AssembleBlock(Block):
         ad_block_tag: typing.Optional[str] = None,
         jit_options: typing.Optional[dict] = None,
         form_compiler_options: typing.Optional[dict] = None,
-        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
+        entity_maps: typing.Optional[typing.Sequence[dolfinx.mesh.EntityMap]] = None,
     ):
         super(AssembleBlock, self).__init__(ad_block_tag=ad_block_tag)
 

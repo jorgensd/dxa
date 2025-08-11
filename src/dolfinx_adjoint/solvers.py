@@ -4,8 +4,6 @@ except ModuleNotFoundError:
     import typing  # type: ignore[no-redef]
 
 import dolfinx.fem.petsc
-import numpy as np
-import numpy.typing as npt
 import pyadjoint
 import ufl
 
@@ -38,16 +36,17 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Iterable[ufl.Form]],
-        bcs: typing.Optional[typing.Iterable[dolfinx.fem.DirichletBC]] = None,
-        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]] = None,
-        P: typing.Optional[typing.Union[ufl.Form, typing.Iterable[typing.Iterable[ufl.Form]]]] = None,
-        kind: typing.Optional[typing.Union[str, typing.Iterable[typing.Iterable[str]]]] = None,
+        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
+        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        bcs: typing.Optional[typing.Sequence[dolfinx.fem.DirichletBC]] = None,
+        u: typing.Optional[typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]] = None,
+        P: typing.Optional[typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]]] = None,
+        kind: typing.Optional[typing.Union[str, typing.Sequence[typing.Sequence[str]]]] = None,
         petsc_options: typing.Optional[dict] = None,
+        petsc_options_prefix: str = "dxa_linear_problem_",
         form_compiler_options: typing.Optional[dict] = None,
         jit_options: typing.Optional[dict] = None,
-        entity_maps: typing.Optional[dict[dolfinx.mesh.Mesh, npt.NDArray[np.int32]]] = None,
+        entity_maps: typing.Optional[typing.Sequence[dolfinx.mesh.EntityMap]] = None,
         ad_block_tag: typing.Optional[str] = None,
         adjoint_petsc_options: typing.Optional[dict] = None,
         tlm_petsc_options: typing.Optional[dict] = None,
@@ -81,11 +80,21 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         self._kind = kind
 
         # Initialize linear solver
-        dolfinx.fem.petsc.LinearProblem.__init__(
-            self, a, L, bcs, self._u, P, kind, petsc_options, form_compiler_options, jit_options, entity_maps
+        super().__init__(
+            a=a,
+            L=L,
+            bcs=bcs,
+            u=self._u,
+            P=P,
+            kind=kind,
+            petsc_options_prefix=petsc_options_prefix,
+            petsc_options=petsc_options,
+            form_compiler_options=form_compiler_options,
+            jit_options=jit_options,
+            entity_maps=entity_maps,
         )
 
-    def solve(self, annotate: bool = True) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
+    def solve(self, annotate: bool = True) -> typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]:
         """
         Solve the linear problem and return the solution.
         """
@@ -108,6 +117,7 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
             )
             tape = pyadjoint.get_working_tape()
             tape.add_block(block)
+
         out = dolfinx.fem.petsc.LinearProblem.solve(self)
         if annotate:
             if isinstance(out, Function):

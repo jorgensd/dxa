@@ -58,7 +58,9 @@ def solve_linear_problem(
 class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
     """Linear problem helper class that homogenizes the boundary conditions, meaning that no lifting is applied."""
 
-    def solve(self) -> typing.Union[dolfinx.fem.Function, typing.Iterable[dolfinx.fem.Function]]:
+    def solve(
+        self,
+    ) -> typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]]:
         """Solve the problem."""
 
         # Assemble lhs
