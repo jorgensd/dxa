@@ -18,7 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest"]
 dev = ["pdbpp", "ipython", "mypy", "ruff"]
-docs = ["jupyter-book", "jupytext", "moola@git+https://github.com/funsim/moola.git","pandas", "pyvista[all]", "networkx"]
+docs = ["jupyter-book", "jupytext", "moola@git+https://github.com/funsim/moola.git","pandas", "pyvista[all]", "networkx", "pygraphviz"]
 all = ["dolfinx_adjoint[test]", "dolfinx_adjoint[dev]", "dolfinx_adjoint[docs]"]
 
 [tool.pytest.ini_options]
