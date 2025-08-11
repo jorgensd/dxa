@@ -1,3 +1,6 @@
+# # Time-distributed control
+# Based on example from https://dolfin-adjoint.github.io/dolfin-adjoint/documentation/time-distributed-control/time-distributed-control.html
+
 from mpi4py import MPI
 import dolfinx
 import dolfinx_adjoint
@@ -13,7 +16,7 @@ nu.name = "nu"  # type: ignore
 Q = dolfinx.fem.functionspace(mesh, ("DG", 0))  # type: ignore[arg-type]
 t = dolfinx_adjoint.Function(Q)
 t.name = "time"
-d = 16*x[0]*(x[0]-1)*x[1]*(x[1]-1)*ufl.sin(ufl.pi*t)
+d = 16 * x[0] * (x[0] - 1) * x[1] * (x[1] - 1) * ufl.sin(ufl.pi * t)
 
 dt = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(0.1))
 T = 1
@@ -26,7 +29,6 @@ while t_val <= T:
     t_val += float(dt)
 
 
-
 def solve_heat(ctrls):
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
@@ -34,7 +36,7 @@ def solve_heat(ctrls):
     f = dolfinx_adjoint.Function(V, name="source")
     u_0 = dolfinx_adjoint.Function(V, name="solution")
 
-    F = ( (u - u_0)/dt*v + nu*ufl.inner(ufl.grad(u), ufl.grad(v)) - f*v)*ufl.dx
+    F = ((u - u_0) / dt * v + nu * ufl.inner(ufl.grad(u), ufl.grad(v)) - f * v) * ufl.dx
     a, L = ufl.system(F)
     mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
     exterior_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
@@ -42,12 +44,33 @@ def solve_heat(ctrls):
 
     bc = dolfinx.fem.dirichletbc(0.0, exterior_dofs, V)
 
-    j = 0.5*float(dt)*dolfinx_adjoint.assemble_scalar((u_0 - d)**2*ufl.dx)
+    j = 0.5 * float(dt) * dolfinx_adjoint.assemble_scalar((u_0 - d) ** 2 * ufl.dx)
 
     t_val = float(dt)
-    problem = dolfinx_adjoint.LinearProblem(a, L, u=u_0, bcs=[bc], petsc_options={"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "ksp_error_if_not_converged": True},
-                                        adjoint_petsc_options={"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "ksp_error_if_not_converged": True},
-                                        tlm_petsc_options={"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps", "ksp_error_if_not_converged": True})
+    problem = dolfinx_adjoint.LinearProblem(
+        a,
+        L,
+        u=u_0,
+        bcs=[bc],
+        petsc_options={
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+            "ksp_error_if_not_converged": True,
+        },
+        adjoint_petsc_options={
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+            "ksp_error_if_not_converged": True,
+        },
+        tlm_petsc_options={
+            "ksp_type": "preonly",
+            "pc_type": "lu",
+            "pc_factor_mat_solver_type": "mumps",
+            "ksp_error_if_not_converged": True,
+        },
+    )
     dolfinx_adjoint.assign(t_val, t)
     while t_val <= T:
         # Update source term from control array
@@ -60,23 +83,28 @@ def solve_heat(ctrls):
 
         # Implement a trapezoidal rule
         if t_val > T - float(dt):
-           weight = 0.5
+            weight = 0.5
         else:
-           weight = 1
-        j += weight*float(dt)*dolfinx_adjoint.assemble_scalar((u_0 - d)**2*ufl.dx)
+            weight = 1
+        j += weight * float(dt) * dolfinx_adjoint.assemble_scalar((u_0 - d) ** 2 * ufl.dx)
         # Update time
         t_val += float(dt)
         dolfinx_adjoint.assign(t_val, t)
-        
+
     return u_0, d, j
+
 
 u, d, j = solve_heat(ctrls)
 
-alpha = dolfinx.fem.Constant(mesh, 1.e-1)
-regularisation = alpha/2*sum([1/dt*(fb-fa)**2*ufl.dx for fb, fa in
-    zip(list(ctrls.values())[1:], list(ctrls.values())[:-1])])
+alpha = dolfinx.fem.Constant(mesh, 1.0e-1)
+regularisation = (
+    alpha
+    / 2
+    * sum([1 / dt * (fb - fa) ** 2 * ufl.dx for fb, fa in zip(list(ctrls.values())[1:], list(ctrls.values())[:-1])])
+)
 
 import pyadjoint
+
 J = j + dolfinx_adjoint.assemble_scalar(regularisation)
 m = [pyadjoint.Control(c) for c in ctrls.values()]
 
@@ -86,9 +114,12 @@ rf = pyadjoint.ReducedFunctional(J, m)
 tape = pyadjoint.get_working_tape()
 tape.visualise_dot("test.dot")
 
-opt_ctrls = pyadjoint.minimize(rf,             method="BFGS",
-    #method="Newton-CG",
-options={"maxiter": 50, "disp": True})
+opt_ctrls = pyadjoint.minimize(
+    rf,
+    method="BFGS",
+    # method="Newton-CG",
+    options={"maxiter": 50, "disp": True},
+)
 
 out_ctrl = dolfinx.fem.Function(V, name="optimal_control")
 with dolfinx.io.VTXWriter(mesh.comm, "opt_ctrl.bp", [out_ctrl]) as vtx:
