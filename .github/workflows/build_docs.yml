@@ -27,7 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install graphviz
-        run: apt update && apt install -y graphviz
+        run: apt update && apt install -y graphviz-dev
         
       - name: Install dependencies
         run: python3 -m pip install ".[docs]"
