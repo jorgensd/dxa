@@ -126,3 +126,6 @@ with dolfinx.io.VTXWriter(mesh.comm, "opt_ctrl.bp", [out_ctrl]) as vtx:
     for t_val, c in zip(ctrls.keys(), opt_ctrls):
         out_ctrl.x.array[:] = c.x.array[:]
         vtx.write(t_val)
+
+assert np.isclose(np.linalg.norm(opt_ctrls[0].x.array), 4.925369634)
+assert np.isclose(np.linalg.norm(opt_ctrls[-1].x.array), 2.871728934)
