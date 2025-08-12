@@ -1,12 +1,16 @@
 # # Time-distributed control
 # Based on example from https://dolfin-adjoint.github.io/dolfin-adjoint/documentation/time-distributed-control/time-distributed-control.html
 
-from mpi4py import MPI
-import dolfinx
-import dolfinx_adjoint
-import ufl
-import numpy as np
 from collections import OrderedDict
+
+from mpi4py import MPI
+
+import dolfinx
+import numpy as np
+import pyadjoint
+import ufl
+
+import dolfinx_adjoint
 
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 8, 8)
 x = ufl.SpatialCoordinate(mesh)
@@ -103,7 +107,6 @@ regularisation = (
     * sum([1 / dt * (fb - fa) ** 2 * ufl.dx for fb, fa in zip(list(ctrls.values())[1:], list(ctrls.values())[:-1])])
 )
 
-import pyadjoint
 
 J = j + dolfinx_adjoint.assemble_scalar(regularisation)
 m = [pyadjoint.Control(c) for c in ctrls.values()]
