@@ -15,7 +15,7 @@ import dolfinx_adjoint
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 8, 8)
 x = ufl.SpatialCoordinate(mesh)
 # FIXME: Until constant is taped we need to use Function
-nu = dolfinx.fem.Constant(mesh, 1e-5)
+nu = dolfinx.fem.Constant(mesh, np.float64(1e-5))
 nu.name = "nu"  # type: ignore
 Q = dolfinx.fem.functionspace(mesh, ("DG", 0))  # type: ignore[arg-type]
 t = dolfinx_adjoint.Function(Q)
@@ -100,7 +100,7 @@ def solve_heat(ctrls):
 
 u, d, j = solve_heat(ctrls)
 
-alpha = dolfinx.fem.Constant(mesh, 1.0e-1)
+alpha = dolfinx.fem.Constant(mesh, np.float64(1.0e-1))
 regularisation = (
     alpha
     / 2
