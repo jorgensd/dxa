@@ -50,13 +50,13 @@
 # create a real function space for the control parameters.
 
 # %%
-import os
-import sys
+
 from pathlib import Path
 
 from mpi4py import MPI
 
 import dolfinx
+import basix
 import gmsh
 import moola
 import numpy as np
@@ -156,45 +156,46 @@ msh = dolfinx.io.gmshio.read_from_msh(msh_file, comm=comm)
 # We configure Pyvista for rendering
 
 # %%
-pyvista.set_jupyter_backend("html")
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
+# pyvista.set_jupyter_backend("html")
+# if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
+#     pyvista.start_xvfb(0.05)
 
 # %% [markdown]
 # and visualize the mesh using a clip plane
 
 # %%
-grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(msh.mesh))
-plotter = pyvista.Plotter()
-plotter.add_mesh_clip_plane(grid, show_edges=True, crinkle=True, color="lightgrey")
-plotter.view_yz(plotter)
-if pyvista.OFF_SCREEN:
-    plotter.screenshot("linear_elasticity_mesh.png")
-else:
-    plotter.show()
+# grid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(msh.mesh))
+# plotter = pyvista.Plotter()
+# plotter.add_mesh_clip_plane(grid, show_edges=True, crinkle=True, color="lightgrey")
+# plotter.view_yz(plotter)
+# if pyvista.OFF_SCREEN:
+#     plotter.screenshot("linear_elasticity_mesh.png")
+# else:
+#     plotter.show()
 
 # %% [markdown]
 # We can also visualize the facet tags which will be used when setting the boundary conditions.
 
 # %%
-assert msh.facet_tags is not None, "Mesh does not have facet tags"
-bgrid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(msh.mesh, msh.facet_tags.dim, msh.facet_tags.indices))
-bgrid.cell_data["Facet tags"] = msh.facet_tags.values
-bgrid.set_active_scalars("Facet tags")
-plotter = pyvista.Plotter()
-plotter.add_mesh(grid, show_edges=True, opacity=0.2)
-plotter.add_mesh_clip_plane(bgrid, show_edges=True, crinkle=True)
-plotter.view_yz(plotter)
-if pyvista.OFF_SCREEN:
-    plotter.screenshot("linear_elasticity_facet_tags.png")
-else:
-    plotter.show()
+# assert msh.facet_tags is not None, "Mesh does not have facet tags"
+# bgrid = pyvista.UnstructuredGrid(*dolfinx.plot.vtk_mesh(msh.mesh, msh.facet_tags.dim, msh.facet_tags.indices))
+# bgrid.cell_data["Facet tags"] = msh.facet_tags.values
+# bgrid.set_active_scalars("Facet tags")
+# plotter = pyvista.Plotter()
+# plotter.add_mesh(grid, show_edges=True, opacity=0.2)
+# plotter.add_mesh_clip_plane(bgrid, show_edges=True, crinkle=True)
+# plotter.view_yz(plotter)
+# if pyvista.OFF_SCREEN:
+#     plotter.screenshot("linear_elasticity_facet_tags.png")
+# else:
+#     plotter.show()
 
 # %% [markdown]
 # We can now define the volume and surface measures which is used for integration
 
 # %%
 quad_degree = 4
+
 dx = ufl.dx(msh.mesh, metadata={"quadrature_degree": quad_degree})
 ds = ufl.ds(domain=msh.mesh, subdomain_data=msh.facet_tags, metadata={"quadrature_degree": quad_degree})
 
@@ -203,13 +204,61 @@ ds = ufl.ds(domain=msh.mesh, subdomain_data=msh.facet_tags, metadata={"quadratur
 # ## Generation synthetic data
 #
 # We will now generate an artificial displacement field $u_{\mathrm{data}}$ with a known pressure
-# $p = 300$ Pa and $\mu = 1000$ Pa (for a real world application this will typically come from
-# some measurements). The goal of the data assimilation is then to retrieve those values.
+# $p = 300$ Pa.
+
+p = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(300.0))
+
+# We will also define a parameter  $\mu$ which will hold different values in
+# different regions of the domain. For this we define one region within the annulus
+# defined by
+#
+# $$
+# \Omega_{\mathrm{region}} = \{ x \in \Omega : 20 \leq r(x) \leq 40 \}
+# $$
+# where $r(x) = \sqrt{x_1^2 + x_2^2 + x_3^2}$ is the radial distance from the center of the annulus.
+# We will set $\mu = 1000$ Pa in this region and $\mu = 500$ Pa in the rest of the domain.
+
+
+marker_region_1 = 1
+marker_region_2 = 2
+
+
+def region(x):
+    # Define the segmentation based on the radial distance from the center
+    r = (x[0] ** 2 + x[1] ** 2 + x[2] ** 2) ** 0.5
+    return np.where(
+        np.logical_and(r >= 20, r <= 40), marker_region_1, marker_region_2
+    )  # 1 for region and 2 for the rest
+
+
+el = basix.ufl.quadrature_element(scheme="default", degree=quad_degree, cell=msh.mesh.basix_cell())
+V_quad = dolfinx.fem.functionspace(msh.mesh, el)
+# Define a function to hold the segmentation
+r = dolfinx.fem.Function(V_quad)
+r.interpolate(region)
+
+# We can visualize the segmentation to see that it is correct using scifem
+
+with scifem.xdmf.XDMFFile("segmentation.xdmf", [r]) as xdmf:
+    xdmf.write(0.0)
+
+
+# Now let us define the shear modulus $\mu$ as a piecewise constant function
+# which will have different values in the two regions defined above.
+
+
+mu_region1 = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(1000.0))
+mu_region2 = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(500.0))
+indicator_functions = [
+    dolfinx_adjoint.Function(V_quad, name="indicator_region1"),
+    dolfinx_adjoint.Function(V_quad, name="indicator_region2"),
+]
+indicator_functions[0].x.array[np.isin(r.x.array, marker_region_1)] = 1.0
+indicator_functions[1].x.array[np.isin(r.x.array, marker_region_2)] = 1.0
+mu = mu_region1 * indicator_functions[0] + mu_region2 * indicator_functions[1]
+
 # We will fix $\lambda = 10 000$ Pa
 
-# %%
-p = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(300.0))
-mu = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(1000.0))
 lmbda = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(10_000.0))
 
 # %% [markdown]
@@ -280,13 +329,15 @@ problem.solve()
 # these to 0 Pa and 500 Pa respectively (just to pick something that is not the correct solution).
 
 # %%
-V_control = scifem.create_real_functionspace(msh.mesh, value_shape=(2,))
+V_control = scifem.create_real_functionspace(msh.mesh, value_shape=(3,))
 v_control = dolfinx_adjoint.Function(V_control, name="Control")
 v_control.x.array[0] = 0.0  # initial pressure set to zero
-v_control.x.array[1] = 500.0  # initial shear modulus set to 500
+v_control.x.array[1] = 700.0  # initial shear modulus set to 700
+v_control.x.array[2] = 700.0  # initial shear modulus set to 700
 p_control = v_control[0]
-mu_control = v_control[1]
-
+mu_control_region1 = v_control[1]
+mu_control_region2 = v_control[2]
+mu_control = mu_control_region1 * indicator_functions[0] + mu_control_region2 * indicator_functions[1]
 
 # %% [markdown]
 # We will now create the variational for for the inverse problem using the control variables
@@ -339,6 +390,25 @@ control = pyadjoint.Control(v_control)
 Jhat = pyadjoint.ReducedFunctional(J, control)
 
 
+h = dolfinx_adjoint.Function(control.control.function_space, name="Control Gradient")
+print("h = 10.0")
+h.x.array[:] = 10.0
+pyadjoint.taylor_test(Jhat, control.control, h)
+
+print("h = 1.0")
+h.x.array[:] = 1.0
+pyadjoint.taylor_test(Jhat, control.control, h)
+
+print("h = 0.1")
+h.x.array[:] = 0.1
+pyadjoint.taylor_test(Jhat, control.control, h)
+
+print("h = 0.01")
+h.x.array[:] = 0.01
+pyadjoint.taylor_test(Jhat, control.control, h)
+exit()
+
+
 # %% [markdown]
 # Finally we create an optimization problem
 
@@ -359,7 +429,8 @@ solution = solver.solve()
 # synthetic displacement field
 
 # %%
-p_sol, mu_sol = solution["control"].array()
-print(f"Optimized pressure: {p_sol}, Optimized shear modulus: {mu_sol}")
+p_sol, mu_sol_region1, mu_sol_region2 = solution["control"].array()
+print(f"Optimized pressure: {p_sol}, Optimized shear modulus: {mu_sol_region1} (region 1), {mu_sol_region2} (region 2)")
 print(f"Relative difference (p) {abs(p_sol - p.value) / p.value}")
-print(f"Relative difference (mu) {abs(mu_sol - mu.value) / mu.value}")
+print(f"Relative difference (mu - region1) {abs(mu_sol_region1 - mu_region1.value) / mu_region1.value}")
+print(f"Relative difference (mu - region2) {abs(mu_sol_region2 - mu_region2.value) / mu_region2.value}")
