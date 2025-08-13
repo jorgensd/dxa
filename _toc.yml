@@ -6,6 +6,7 @@ parts:
     chapters:
     - file: "demos/poisson_mother.py"
     - file: "demos/linear_elasticity.py"
+    - file: "demos/time_distributed_control.py"
   - caption: Python API
     chapters:
     - file: "docs/api"
