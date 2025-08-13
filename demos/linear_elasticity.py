@@ -132,7 +132,7 @@ def generate_mesh(
 c = (0.0, 0.0, 0.0)
 r_outer: float = 50
 r_inner: float = 10
-char_length = 10.0
+char_length = 15.0
 msh_file = Path("annulus.msh")
 
 if not msh_file.exists():
@@ -194,7 +194,7 @@ msh = dolfinx.io.gmshio.read_from_msh(msh_file, comm=comm)
 # We can now define the volume and surface measures which is used for integration
 
 # %%
-quad_degree = 4
+quad_degree = 6
 
 dx = ufl.dx(msh.mesh, metadata={"quadrature_degree": quad_degree})
 ds = ufl.ds(domain=msh.mesh, subdomain_data=msh.facet_tags, metadata={"quadrature_degree": quad_degree})
@@ -206,7 +206,7 @@ ds = ufl.ds(domain=msh.mesh, subdomain_data=msh.facet_tags, metadata={"quadratur
 # We will now generate an artificial displacement field $u_{\mathrm{data}}$ with a known pressure
 # $p = 300$ Pa.
 
-p = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(300.0))
+p = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(2000.0))
 
 # We will also define a parameter  $\mu$ which will hold different values in
 # different regions of the domain. For this we define one region within the annulus
@@ -248,7 +248,7 @@ with scifem.xdmf.XDMFFile("segmentation.xdmf", [r]) as xdmf:
 
 
 mu_region1 = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(1000.0))
-mu_region2 = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(500.0))
+mu_region2 = dolfinx.fem.Constant(msh.mesh, dolfinx.default_scalar_type(100.0))
 indicator_functions = [
     dolfinx_adjoint.Function(V_quad, name="indicator_region1"),
     dolfinx_adjoint.Function(V_quad, name="indicator_region2"),
@@ -332,8 +332,8 @@ problem.solve()
 V_control = scifem.create_real_functionspace(msh.mesh, value_shape=(3,))
 v_control = dolfinx_adjoint.Function(V_control, name="Control")
 v_control.x.array[0] = 0.0  # initial pressure set to zero
-v_control.x.array[1] = 700.0  # initial shear modulus set to 700
-v_control.x.array[2] = 700.0  # initial shear modulus set to 700
+v_control.x.array[1] = 500.0  # initial shear modulus set to 700
+v_control.x.array[2] = 500.0  # initial shear modulus set to 700
 p_control = v_control[0]
 mu_control_region1 = v_control[1]
 mu_control_region2 = v_control[2]
@@ -364,14 +364,14 @@ problem_opt = dolfinx_adjoint.LinearProblem(
     u=u,
     bcs=bcs,
     petsc_options={
-        # "ksp_type": "cg",
-        # "ksp_rtol": 1e-6,
-        # "ksp_atol": 1e-8,
-        # "ksp_max_it": 10000,
-        # "pc_type": "gamg",
-        "ksp_type": "preonly",
-        "pc_type": "lu",
-        "pc_factor_mat_solver_type": "mumps",
+        "ksp_type": "cg",
+        "ksp_rtol": 1e-6,
+        "ksp_atol": 1e-8,
+        "ksp_max_it": 10000,
+        "pc_type": "gamg",
+        # "ksp_type": "preonly",
+        # "pc_type": "lu",
+        # "pc_factor_mat_solver_type": "mumps",
     },
 )
 print("Solving linear problem")
@@ -393,23 +393,23 @@ control = pyadjoint.Control(v_control)
 Jhat = pyadjoint.ReducedFunctional(J, control)
 
 
-h = dolfinx_adjoint.Function(control.control.function_space, name="Control Gradient")
-print("h = 10.0")
-h.x.array[:] = 10.0
-pyadjoint.taylor_test(Jhat, control.control, h)
+# h = dolfinx_adjoint.Function(control.control.function_space, name="Control Gradient")
+# print("h = 10.0")
+# h.x.array[:] = 10.0
+# pyadjoint.taylor_test(Jhat, control.control, h)
 
-print("h = 1.0")
-h.x.array[:] = 1.0
-pyadjoint.taylor_test(Jhat, control.control, h)
+# print("h = 1.0")
+# h.x.array[:] = 1.0
+# pyadjoint.taylor_test(Jhat, control.control, h)
 
-print("h = 0.1")
-h.x.array[:] = 0.1
-pyadjoint.taylor_test(Jhat, control.control, h)
+# print("h = 0.1")
+# h.x.array[:] = 0.1
+# pyadjoint.taylor_test(Jhat, control.control, h)
 
-print("h = 0.01")
-h.x.array[:] = 0.01
-pyadjoint.taylor_test(Jhat, control.control, h)
-exit()
+# print("h = 0.01")
+# h.x.array[:] = 0.01
+# pyadjoint.taylor_test(Jhat, control.control, h)
+# exit()
 
 
 # %% [markdown]
@@ -423,7 +423,15 @@ f_moola = DolfinxPrimalVector(v_control)
 # and solve it using the L-BFGS method
 
 # %%
-optimization_options = {"jtol": 0, "gtol": 1e-9, "Hinit": "default", "maxiter": 100, "mem_lim": 10, "rjtol": 0}
+optimization_options = {
+    "jtol": 0,
+    "gtol": 1e-10,
+    "Hinit": "default",
+    "maxiter": 100,
+    "mem_lim": 10,
+    "rjtol": 0,
+    "record": {"grad_norm", "objective", "control"},
+}
 solver = moola.BFGS(optimization_problem, f_moola, options=optimization_options)
 solution = solver.solve()
 
