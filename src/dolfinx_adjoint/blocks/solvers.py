@@ -477,7 +477,7 @@ class LinearProblemBlock(pyadjoint.Block):
                 entity_maps=self._entity_maps,
             )
             dolfinx.fem.petsc.assemble_vector(b.petsc_vec, compiled_soa_rhs)
-            b.array.scatter_reverse(dolfinx.la.InsertMode.ADD)
+            b.scatter_reverse(dolfinx.la.InsertMode.add)
             b.array[:] *= -1
 
         b.array[:] += hessian_inputs[0].array
