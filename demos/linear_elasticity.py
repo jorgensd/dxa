@@ -364,11 +364,14 @@ problem_opt = dolfinx_adjoint.LinearProblem(
     u=u,
     bcs=bcs,
     petsc_options={
-        "ksp_type": "cg",
-        "ksp_rtol": 1e-6,
-        "ksp_atol": 1e-8,
-        "ksp_max_it": 10000,
-        "pc_type": "gamg",
+        # "ksp_type": "cg",
+        # "ksp_rtol": 1e-6,
+        # "ksp_atol": 1e-8,
+        # "ksp_max_it": 10000,
+        # "pc_type": "gamg",
+        "ksp_type": "preonly",
+        "pc_type": "lu",
+        "pc_factor_mat_solver_type": "mumps",
     },
 )
 print("Solving linear problem")
