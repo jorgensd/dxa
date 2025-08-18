@@ -252,6 +252,13 @@ bcs = [dolfinx.fem.dirichletbc(np.array((0.0,) * d), outer_dofs, V)]
 
 # %%
 print("Creating linear problem")
+petsc_options = {
+    "ksp_type": "cg",
+    "ksp_rtol": 1e-6,
+    "ksp_atol": 1e-8,
+    "ksp_max_it": 10000,
+    "pc_type": "gamg",
+}
 u_data = dolfinx_adjoint.Function(V, name="Data")
 problem = dolfinx.fem.petsc.LinearProblem(
     a,
@@ -259,14 +266,7 @@ problem = dolfinx.fem.petsc.LinearProblem(
     u=u_data,
     bcs=bcs,
     petsc_options_prefix="dxa_demo_linear_elasticity_",
-    petsc_options={
-        "ksp_type": "cg",
-        "ksp_rtol": 1e-6,
-        "ksp_atol": 1e-8,
-        "ksp_max_it": 10000,
-        "pc_type": "gamg",
-        "ksp_monitor": None,
-    },
+    petsc_options=petsc_options,
 )
 print("Solving linear problem")
 problem.solve()
@@ -312,13 +312,8 @@ problem_opt = dolfinx_adjoint.LinearProblem(
     L_opt,
     u=u,
     bcs=bcs,
-    petsc_options={
-        "ksp_type": "cg",
-        "ksp_rtol": 1e-6,
-        "ksp_atol": 1e-8,
-        "ksp_max_it": 10000,
-        "pc_type": "gamg",
-    },
+    petsc_options=petsc_options,
+    adjoint_petsc_options=petsc_options,
 )
 print("Solving linear problem")
 problem_opt.solve()
