@@ -10,7 +10,7 @@ import pytest
 import ufl
 from ufl.algorithms import expand_derivatives
 
-from dolfinx_adjoint import Function, LinearProblem, assemble_scalar
+from dolfinx_adjoint import Function, LinearProblem, NonlinearProblem, assemble_scalar
 
 
 def convergence_rates(r, p):
@@ -160,8 +160,9 @@ def reference_solution(
     return J_org, dJac_dm, Hm_dm, functional_values
 
 
+@pytest.mark.parametrize("linear_solver", [True, False])
 @pytest.mark.parametrize("cell_type", [dolfinx.mesh.CellType.triangle, dolfinx.mesh.CellType.quadrilateral])
-def test_poisson_mother(cell_type: dolfinx.mesh.CellType):
+def test_poisson_mother(cell_type: dolfinx.mesh.CellType, linear_solver: bool):
     """Compare differentiation of the Poisson mother problem with a hand-written implementation."""
     steps = 4
     step_length = 0.01
@@ -199,8 +200,8 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType):
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
     F = ufl.inner(ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
-    a, L = ufl.system(F)
-
+    if not linear_solver:
+        F = ufl.replace(F, {u: uh})
     tdim = mesh.topology.dim
     mesh.topology.create_connectivity(tdim - 1, tdim)
     exterior_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
@@ -214,15 +215,27 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType):
         "pc_factor_mat_solver_type": "mumps",
         "ksp_error_if_not_converged": True,
     }
-    problem = LinearProblem(
-        a,
-        L,
-        u=uh,
-        bcs=[bc],
-        petsc_options=petsc_options,
-        adjoint_petsc_options=petsc_options,
-        tlm_petsc_options=petsc_options,  # type: ignore
-    )
+    if linear_solver:
+        problem = LinearProblem(
+            *ufl.system(F),
+            u=uh,
+            bcs=[bc],
+            petsc_options=petsc_options,
+            adjoint_petsc_options=petsc_options,
+            tlm_petsc_options=petsc_options,  # type: ignore
+        )
+    else:
+        snes_options = {
+            "snes_type": "newtonls",
+            "snes_linesearch_type": "none",
+            "snes_error_if_not_converged": True,
+            "snes_monitor": None,
+            "snes_atol": 1e-15,
+            "snes_rtol": 1e-15
+        }
+        snes_options.update(petsc_options)
+        problem = NonlinearProblem(F, uh, bcs=[bc], petsc_options=snes_options, adjoint_petsc_options=petsc_options,
+                                   tlm_petsc_options=petsc_options)
     problem.solve()
 
     J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
