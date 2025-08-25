@@ -231,11 +231,17 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType, linear_solver: bool):
             "snes_error_if_not_converged": True,
             "snes_monitor": None,
             "snes_atol": 1e-15,
-            "snes_rtol": 1e-15
+            "snes_rtol": 1e-15,
         }
         snes_options.update(petsc_options)
-        problem = NonlinearProblem(F, uh, bcs=[bc], petsc_options=snes_options, adjoint_petsc_options=petsc_options,
-                                   tlm_petsc_options=petsc_options)
+        problem = NonlinearProblem(
+            F,
+            uh,
+            bcs=[bc],
+            petsc_options=snes_options,
+            adjoint_petsc_options=petsc_options,
+            tlm_petsc_options=petsc_options,
+        )
     problem.solve()
 
     J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx

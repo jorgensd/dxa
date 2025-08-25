@@ -129,8 +129,6 @@ class LinearProblem(dolfinx.fem.petsc.LinearProblem):
         return out
 
 
-
-
 class NonlinearProblem(dolfinx.fem.petsc.NonlinearProblem):
     """A linear problem that can be used with adjoint methods.
 
@@ -202,8 +200,8 @@ class NonlinearProblem(dolfinx.fem.petsc.NonlinearProblem):
 
         # Initialize linear solver
         super().__init__(
-            F = F,
-            J=J, 
+            F=F,
+            J=J,
             P=P,
             bcs=self._bcs,
             u=self._u,
@@ -222,8 +220,8 @@ class NonlinearProblem(dolfinx.fem.petsc.NonlinearProblem):
         annotate = pyadjoint.annotate_tape({"annotate": annotate})
         if annotate:
             block = NonlinearProblemBlock(
-                J = self._lhs,  # type: ignore
-                F = self._rhs,  # type: ignore
+                J=self._lhs,  # type: ignore
+                F=self._rhs,  # type: ignore
                 bcs=self._bcs,
                 u=self.u,
                 P=self._preconditioner,

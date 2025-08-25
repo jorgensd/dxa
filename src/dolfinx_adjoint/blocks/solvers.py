@@ -25,17 +25,17 @@ class LinearProblemBlock(pyadjoint.Block):
         self,
         a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
         L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
-        bcs: typing.Sequence[dolfinx.fem.DirichletBC] ,
-        u: typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]] ,
-        P: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]] ,
-        kind: typing.Union[str, typing.Sequence[typing.Sequence[str]]] ,
-        petsc_options: dict ,
-        form_compiler_options: dict ,
-        jit_options: dict ,
-        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap] ,
-        ad_block_tag: str ,
-        adjoint_petsc_options: dict ,
-        tlm_petsc_options: dict ,
+        bcs: typing.Sequence[dolfinx.fem.DirichletBC],
+        u: typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]],
+        P: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
+        kind: typing.Union[str, typing.Sequence[typing.Sequence[str]]],
+        petsc_options: dict,
+        form_compiler_options: dict,
+        jit_options: dict,
+        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap],
+        ad_block_tag: str,
+        adjoint_petsc_options: dict,
+        tlm_petsc_options: dict,
         petsc_options_prefix: str = "dxa_linear_problem_block_",
     ) -> None:
         self._adjoint_petsc_options = adjoint_petsc_options
@@ -586,7 +586,6 @@ class LinearProblemBlock(pyadjoint.Block):
         return hessian_output
 
 
-
 class NonlinearProblemBlock(pyadjoint.Block):
     """A linear problem that can be used with adjoint methods.
 
@@ -607,12 +606,12 @@ class NonlinearProblemBlock(pyadjoint.Block):
         petsc_options: dict,
         form_compiler_options: dict,
         jit_options: dict,
-        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap] ,
-        ad_block_tag: str ,
-        adjoint_petsc_options: dict ,
+        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap],
+        ad_block_tag: str,
+        adjoint_petsc_options: dict,
         tlm_petsc_options: dict,
         petsc_options_prefix: str = "dxa_nonlinear_block_",
-) -> None:
+    ) -> None:
         self._adjoint_petsc_options = adjoint_petsc_options
         self._tlm_petsc_options = tlm_petsc_options
         super().__init__(ad_block_tag=ad_block_tag)
@@ -625,7 +624,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
             self._rhs = F
         else:
             self._u = [pyadjoint.create_overloaded_object(ui) for ui in u]
-            replace_dict = {ui:_ui for ui, _ui in zip(u, self._u)}
+            replace_dict = {ui: _ui for ui, _ui in zip(u, self._u)}
             self._rhs = [ufl.replace(Fi, replace_dict) for Fi in F]
 
         # NOTE: Add mesh and constants as dependencies later on
@@ -826,8 +825,6 @@ class NonlinearProblemBlock(pyadjoint.Block):
                     adj_form[j][i] = form_ij
             return adj_form
 
-
-
     def _compute_residual(self) -> typing.Union[ufl.Form, list[ufl.Form]]:
         """Convert the formulation :math:`a(u, v)=L(v)` into a residual :math:`F(u_b, v) = 0` where
         :math:`u_b` is the solution of the forward problem at the current time and all coefficients are updated.
@@ -837,7 +834,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
         F_form: typing.Union[ufl.Form, list[ufl.Form]] = []
         replacement_map = self._create_replace_map(self._rhs)
         u_list = self._u if isinstance(self._u, list) else [self._u]
-        for (u, block) in zip(u_list, replacement_functions):
+        for u, block in zip(u_list, replacement_functions):
             replacement_map[u] = block.saved_output
 
         if isinstance(self._u, Function):
@@ -848,7 +845,6 @@ class NonlinearProblemBlock(pyadjoint.Block):
                 F_form[j] = ufl.replace(self._rhs[j], replacement_map)
         return F_form
 
-  
     def _compute_residual_derivative(self) -> typing.Union[ufl.Form, list[list[ufl.Form]]]:
         """Compute the derivative of the residual with respect to the outputs."""
 
@@ -865,7 +861,6 @@ class NonlinearProblemBlock(pyadjoint.Block):
                 for j in range(len(outputs)):
                     dFdu[-1].append(ufl.derivative(F_form[i], outputs[j], ufl.TrialFunction(outputs[j].function_space)))
         return dFdu
-
 
     def prepare_evaluate_tlm(
         self, inputs, tlm_inputs, relevant_outputs
