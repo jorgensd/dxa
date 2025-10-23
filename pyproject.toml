@@ -10,7 +10,7 @@ license = { file = "LICENSE" }
 readme = "README.md"
 dependencies = [
       "fenics-dolfinx>0.9.0",
-      "pyadjoint-ad",
+      "pyadjoint-ad<2025.10.0",
       "typing_extensions; python_version < '3.11'",
 ]
 
