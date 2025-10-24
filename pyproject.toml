@@ -3,13 +3,13 @@ requires = ["setuptools>=61.0.0", "wheel"]
 
 [project]
 name = "dolfinx_adjoint"
-version = "0.1.0"
+version = "0.2.0"
 description = "Automatic differentation compatible with DOLFINx"
 authors = [{ name = "Jørgen S. Dokken", email = "dokken@simula.no" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 dependencies = [
-      "fenics-dolfinx>0.9.0",
+      "fenics-dolfinx>=0.10.0",
       "pyadjoint-ad<2025.10.0",
       "typing_extensions; python_version < '3.11'",
 ]
@@ -18,7 +18,13 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest"]
 dev = ["pdbpp", "ipython", "mypy", "ruff"]
-docs = ["jupyter-book", "jupytext", "moola@git+https://github.com/funsim/moola.git","pandas", "pyvista[all]"]
+docs = [
+      "jupyter-book",
+      "jupytext",
+      "moola@git+https://github.com/funsim/moola.git",
+      "pandas",
+      "pyvista[all]",
+]
 all = ["dolfinx_adjoint[test]", "dolfinx_adjoint[dev]", "dolfinx_adjoint[docs]"]
 
 [tool.pytest.ini_options]
