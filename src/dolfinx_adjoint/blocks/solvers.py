@@ -356,7 +356,7 @@ class LinearProblemBlock(pyadjoint.Block):
         dudm = dolfinx.fem.Function(V, name="du_dm_tlm_linearblock")
         A_tlm = dolfinx.fem.petsc.assemble_matrix(dFdu, bcs=bcs)
         A_tlm.assemble()
-        b_tlm = dolfinx.fem.create_vector(dFdm_compiled)
+        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))
         b_tlm.array[:] = 0.0
         dolfinx.fem.petsc.assemble_vector(b_tlm.petsc_vec, dFdm_compiled)
 
@@ -916,7 +916,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
         dudm = dolfinx.fem.Function(V, name="du_dm_tlm_linearblock")
         A_tlm = dolfinx.fem.petsc.assemble_matrix(dFdu, bcs=bcs)
         A_tlm.assemble()
-        b_tlm = dolfinx.fem.create_vector(dFdm_compiled)
+        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))
         b_tlm.array[:] = 0.0
         dolfinx.fem.petsc.assemble_vector(b_tlm.petsc_vec, dFdm_compiled)
 
