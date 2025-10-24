@@ -125,9 +125,9 @@ class Function(dolfinx.fem.Function, FloatingType):
         return r
 
     @no_annotations
-    def _ad_convert_type(self, value: dolfinx.la.Vector, options: typing.Optional[dict] = None) -> dolfinx.fem.Function:
+    def _ad_convert_riesz(self, value: dolfinx.la.Vector, riesz_map: typing.Optional[dict] = None) -> dolfinx.fem.Function:
         """Convert a vector to a Riesz representation of the function."""
-        options = {} if options is None else options
+        options = {} if riesz_map is None else riesz_map
         riesz_representation = options.get("riesz_representation", "l2")
         if riesz_representation == "l2":
             return create_overloaded_object(function_from_vector(self.function_space, value))

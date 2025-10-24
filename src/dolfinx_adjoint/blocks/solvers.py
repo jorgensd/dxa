@@ -433,7 +433,7 @@ class LinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
-        vec = _create_vector(compiled_sensitivity)
+        vec = _create_vector(compiled_sensitivity, sensitivity.arguments()[0].ufl_function_space())
         assemble_compiled_form(compiled_sensitivity, tensor=vec)
         return vec
 
@@ -581,7 +581,8 @@ class LinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
-        hessian_output = assemble_compiled_form(compiled_hessian)
+        hessian_output = _create_vector(compiled_hessian, hessian_form.arguments()[0].ufl_function_space())
+        assemble_compiled_form(compiled_hessian, hessian_output)
         hessian_output.array[:] *= -1.0
         return hessian_output
 
@@ -990,7 +991,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
-        vec = _create_vector(compiled_sensitivity)
+        vec = _create_vector(compiled_sensitivity, sensitivity.arguments()[0].ufl_function_space())
         assemble_compiled_form(compiled_sensitivity, tensor=vec)
         return vec
 
@@ -1138,6 +1139,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
             form_compiler_options=self._form_compiler_options,
             entity_maps=self._entity_maps,
         )
-        hessian_output = assemble_compiled_form(compiled_hessian)
+        hessian_output = _create_vector(compiled_hessian, hessian_form.arguments()[0].ufl_function_space())
+        assemble_compiled_form(compiled_hessian, hessian_output)
         hessian_output.array[:] *= -1.0
         return hessian_output

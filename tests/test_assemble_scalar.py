@@ -44,7 +44,12 @@ def test_function_control(mesh_var_name: str, request):
 
     J = assemble_scalar(error)
 
-    control = pyadjoint.Control(v)
+    derivative_options={
+        "riesz_representation": "L2",
+        "petsc_options": {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"},
+        "jit_options": {"cffi_extra_compile_args": ["-Ofast", "-march=native"], "cffi_libraries": ["m"]},
+    }
+    control = pyadjoint.Control(v, riesz_map=derivative_options)
     Jh = pyadjoint.ReducedFunctional(J, control)
     assert Jh(v) > 0
 
@@ -78,11 +83,6 @@ def test_function_control(mesh_var_name: str, request):
         tol=tol,
         scale=1e9,
         options={"maxiter": 200, "disp": True},
-        derivative_options={
-            "riesz_representation": "L2",
-            "petsc_options": {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"},
-            "jit_options": {"cffi_extra_compile_args": ["-Ofast", "-march=native"], "cffi_libraries": ["m"]},
-        },
     )
 
     u_opt = dolfinx.fem.Function(V)

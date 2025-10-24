@@ -13,12 +13,27 @@ from ufl.formatting.ufl2unicode import ufl2unicode
 class _SpecialVector(dolfinx.la.Vector):
     """Workaround adding __iadd__ to `dolfinx.la.Vector`."""
 
+    def __init__(self, x, function_space: dolfinx.fem.FunctionSpace):
+        super().__init__(x)
+        self._function_space = function_space
+
     def __iadd__(self, other):
         self.array[:] += other.array[:]
         return self
+    
+    @property
+    def function_space(self) -> dolfinx.fem.FunctionSpace:
+        return self._function_space
 
+    @property
+    def x(self):
+        return self
 
-def _vector(map, bs=1, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
+    @property
+    def name(self):
+        return "SpecialVector"
+
+def _vector(map, bs:int, function_space: dolfinx.fem.FunctionSpace, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
     """Create a distributed vector.
 
     Args:
@@ -47,10 +62,10 @@ def _vector(map, bs=1, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
     else:
         raise NotImplementedError(f"Type {dtype} not supported.")
 
-    return _SpecialVector(vtype(map, bs))
+    return _SpecialVector(vtype(map, bs), function_space)
 
 
-def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
+def _create_vector(L: dolfinx.fem.Form, space:dolfinx.fem.FunctionSpace) -> _SpecialVector:
     """Create a Vector that is compatible with a given linear form.
 
     Args:
@@ -62,11 +77,12 @@ def _create_vector(L: dolfinx.fem.Form) -> _SpecialVector:
     # Can just take the first dofmap here, since all dof maps have the same
     # index map in mixed-topology meshes
     dofmap = L.function_spaces[0].dofmaps(0)  # type: ignore
-    return _vector(dofmap.index_map, dofmap.index_map_bs, dtype=L.dtype)
+    assert space._cpp_object == L.function_spaces[0], "Function space mismatch when creating vector."
+    return _vector(dofmap.index_map, dofmap.index_map_bs, dtype=L.dtype, function_space=space)
 
 
 def assemble_compiled_form(
-    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]] = None
+    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]]=None
 ) -> typing.Union[dolfinx.la.Vector, _SpecialVector, float]:
     """Assemble a compiled form and optionally apply Dirichlet boundary condition.
 
@@ -81,7 +97,6 @@ def assemble_compiled_form(
     """
 
     if form.rank == 1:
-        tensor = _create_vector(form) if tensor is None else tensor
         assert isinstance(tensor, dolfinx.la.Vector)
         dolfinx.fem.assemble._assemble_vector_array(tensor.array, form)
         tensor.scatter_reverse(dolfinx.la.InsertMode.add)
@@ -190,7 +205,7 @@ class AssembleBlock(Block):
                 assert len(dform.arguments()) == 1
                 space = dform.arguments()[0].ufl_function_space()
                 # self._cached_vectors[id(space)] = _create_vector(compiled_adjoint)
-            vector = _create_vector(compiled_adjoint)
+            vector = _create_vector(compiled_adjoint, space)
             vector.array[:] = 0.0
             # elif self._cached_vectors.get(id(space)) is None:
             # Create a new vector for this space
