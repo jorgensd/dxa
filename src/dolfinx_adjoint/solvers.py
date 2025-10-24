@@ -189,7 +189,7 @@ class NonlinearProblem(dolfinx.fem.petsc.NonlinearProblem):
 
         # Cache some objects
         self._bcs = [] if bcs is None else bcs
-        self._lhs = dolfinx.fem.forms.derivative_block(F, u)
+        self._lhs = dolfinx.fem.forms.derivative_block(F, self._u)
         self._rhs = F
         self._preconditioner = P
         self._jit_options = jit_options

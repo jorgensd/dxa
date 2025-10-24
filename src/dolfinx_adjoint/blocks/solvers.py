@@ -23,19 +23,19 @@ class LinearProblemBlock(pyadjoint.Block):
 
     def __init__(
         self,
-        a: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
-        L: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        a: ufl.Form | typing.Sequence[typing.Sequence[ufl.Form]],
+        L: ufl.Form | typing.Sequence[ufl.Form],
         bcs: typing.Sequence[dolfinx.fem.DirichletBC],
-        u: typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]],
-        P: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
-        kind: typing.Union[str, typing.Sequence[typing.Sequence[str]]],
-        petsc_options: dict,
-        form_compiler_options: dict,
-        jit_options: dict,
-        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap],
-        ad_block_tag: str,
-        adjoint_petsc_options: dict,
-        tlm_petsc_options: dict,
+        u: dolfinx.fem.Function | typing.Sequence[dolfinx.fem.Function],
+        P: ufl.Form | typing.Sequence[typing.Sequence[ufl.Form]] | None,
+        kind: str | typing.Sequence[typing.Sequence[str]] | None,
+        petsc_options: dict | None,
+        form_compiler_options: dict | None,
+        jit_options: dict | None,
+        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap] | None,
+        ad_block_tag: str | None,
+        adjoint_petsc_options: dict | None,
+        tlm_petsc_options: dict | None,
         petsc_options_prefix: str = "dxa_linear_problem_block_",
     ) -> None:
         self._adjoint_petsc_options = adjoint_petsc_options
@@ -356,7 +356,7 @@ class LinearProblemBlock(pyadjoint.Block):
         dudm = dolfinx.fem.Function(V, name="du_dm_tlm_linearblock")
         A_tlm = dolfinx.fem.petsc.assemble_matrix(dFdu, bcs=bcs)
         A_tlm.assemble()
-        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))
+        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))  # type: ignore[arg-type]
         b_tlm.array[:] = 0.0
         dolfinx.fem.petsc.assemble_vector(b_tlm.petsc_vec, dFdm_compiled)
 
@@ -598,19 +598,19 @@ class NonlinearProblemBlock(pyadjoint.Block):
 
     def __init__(
         self,
-        F: typing.Union[ufl.Form, typing.Sequence[ufl.Form]],
+        F: ufl.Form | typing.Sequence[ufl.Form],
         bcs: typing.Sequence[dolfinx.fem.DirichletBC],
-        u: typing.Union[dolfinx.fem.Function, typing.Sequence[dolfinx.fem.Function]],
-        J: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
-        P: typing.Union[ufl.Form, typing.Sequence[typing.Sequence[ufl.Form]]],
-        kind: typing.Union[str, typing.Sequence[typing.Sequence[str]]],
-        petsc_options: dict,
-        form_compiler_options: dict,
-        jit_options: dict,
-        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap],
-        ad_block_tag: str,
-        adjoint_petsc_options: dict,
-        tlm_petsc_options: dict,
+        u: dolfinx.fem.Function | typing.Sequence[dolfinx.fem.Function],
+        J: ufl.Form | typing.Sequence[typing.Sequence[ufl.Form]],
+        P: ufl.Form | typing.Sequence[typing.Sequence[ufl.Form]],
+        kind: str | typing.Sequence[typing.Sequence[str]] | None,
+        petsc_options: dict | None,
+        form_compiler_options: dict | None,
+        jit_options: dict | None,
+        entity_maps: typing.Sequence[dolfinx.mesh.EntityMap] | None,
+        ad_block_tag: str | None,
+        adjoint_petsc_options: dict | None,
+        tlm_petsc_options: dict | None,
         petsc_options_prefix: str = "dxa_nonlinear_block_",
     ) -> None:
         self._adjoint_petsc_options = adjoint_petsc_options
@@ -917,7 +917,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
         dudm = dolfinx.fem.Function(V, name="du_dm_tlm_linearblock")
         A_tlm = dolfinx.fem.petsc.assemble_matrix(dFdu, bcs=bcs)
         A_tlm.assemble()
-        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))
+        b_tlm = dolfinx.fem.create_vector(dolfinx.fem.extract_function_spaces(dFdm_compiled))  # type: ignore[arg-type]
         b_tlm.array[:] = 0.0
         dolfinx.fem.petsc.assemble_vector(b_tlm.petsc_vec, dFdm_compiled)
 
