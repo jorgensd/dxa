@@ -69,8 +69,7 @@ import dolfinx_adjoint
 
 # + tags=["hide-input"]
 pyvista.set_jupyter_backend("html")
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
+
 # -
 
 # + [markdown]

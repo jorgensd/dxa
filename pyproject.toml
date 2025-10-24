@@ -23,7 +23,7 @@ docs = [
       "jupytext",
       "moola@git+https://github.com/funsim/moola.git",
       "pandas",
-      "pyvista[all]",
+      "pyvista[all]>0.45",
 ]
 all = ["dolfinx_adjoint[test]", "dolfinx_adjoint[dev]", "dolfinx_adjoint[docs]"]
 

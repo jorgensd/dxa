@@ -9,8 +9,6 @@ on:
 
 env:
   PUBLISH_DIR: ./_build/html
-  PYVISTA_TRAME_SERVER_PROXY_PREFIX: "/proxy/"
-  PYVISTA_TRAME_SERVER_PROXY_ENABLED: "True"
   PYVISTA_OFF_SCREEN: false
   PYVISTA_JUPYTER_BACKEND: "html"
   LIBGL_ALWAYS_SOFTWARE: 1
@@ -26,6 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         
+      - name: Install mesa-utils
+        run: apt-get update && apt-get install -y mesa-utils 
+       
       - name: Install dependencies
         run: python3 -m pip install ".[docs]"
 
