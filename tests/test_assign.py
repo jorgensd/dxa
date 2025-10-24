@@ -46,7 +46,6 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
 
     J = assemble_scalar(error)
 
-
     control = pyadjoint.Control(d)
     Jh = pyadjoint.ReducedFunctional(J, control)
 

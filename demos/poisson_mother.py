@@ -42,8 +42,6 @@
 # We start by import the necessary modules for this demo, which includes `mpi4py`, `dolfinx` and `dolfinx_adjoint`.
 
 # +
-import os
-import sys
 
 from mpi4py import MPI
 

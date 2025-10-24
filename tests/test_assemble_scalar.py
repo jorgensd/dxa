@@ -44,7 +44,7 @@ def test_function_control(mesh_var_name: str, request):
 
     J = assemble_scalar(error)
 
-    derivative_options={
+    derivative_options = {
         "riesz_representation": "L2",
         "petsc_options": {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"},
         "jit_options": {"cffi_extra_compile_args": ["-Ofast", "-march=native"], "cffi_libraries": ["m"]},

@@ -20,7 +20,7 @@ class _SpecialVector(dolfinx.la.Vector):
     def __iadd__(self, other):
         self.array[:] += other.array[:]
         return self
-    
+
     @property
     def function_space(self) -> dolfinx.fem.FunctionSpace:
         return self._function_space
@@ -33,7 +33,10 @@ class _SpecialVector(dolfinx.la.Vector):
     def name(self):
         return "SpecialVector"
 
-def _vector(map, bs:int, function_space: dolfinx.fem.FunctionSpace, dtype: npt.DTypeLike = np.float64) -> _SpecialVector:
+
+def _vector(
+    map, bs: int, function_space: dolfinx.fem.FunctionSpace, dtype: npt.DTypeLike = np.float64
+) -> _SpecialVector:
     """Create a distributed vector.
 
     Args:
@@ -65,7 +68,7 @@ def _vector(map, bs:int, function_space: dolfinx.fem.FunctionSpace, dtype: npt.D
     return _SpecialVector(vtype(map, bs), function_space)
 
 
-def _create_vector(L: dolfinx.fem.Form, space:dolfinx.fem.FunctionSpace) -> _SpecialVector:
+def _create_vector(L: dolfinx.fem.Form, space: dolfinx.fem.FunctionSpace) -> _SpecialVector:
     """Create a Vector that is compatible with a given linear form.
 
     Args:
@@ -82,7 +85,7 @@ def _create_vector(L: dolfinx.fem.Form, space:dolfinx.fem.FunctionSpace) -> _Spe
 
 
 def assemble_compiled_form(
-    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]]=None
+    form: dolfinx.fem.Form, tensor: typing.Optional[typing.Union[dolfinx.la.Vector, _SpecialVector | float]] = None
 ) -> typing.Union[dolfinx.la.Vector, _SpecialVector, float]:
     """Assemble a compiled form and optionally apply Dirichlet boundary condition.
 
