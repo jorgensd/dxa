@@ -215,6 +215,7 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType, linear_solver: bool):
         "pc_factor_mat_solver_type": "mumps",
         "ksp_error_if_not_converged": True,
     }
+    problem: typing.Union[LinearProblem, NonlinearProblem]
     if linear_solver:
         problem = LinearProblem(
             *ufl.system(F),

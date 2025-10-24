@@ -595,6 +595,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
 
     _adjoint_solutions: typing.Union[Function, typing.Sequence[Function]]
     _second_adjoint_solutions: typing.Union[Function, typing.Sequence[Function]]
+    _rhs: ufl.Form | typing.Sequence[ufl.Form]
 
     def __init__(
         self,
@@ -625,6 +626,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
             self._rhs = F
         else:
             self._u = [pyadjoint.create_overloaded_object(ui) for ui in u]
+            assert isinstance(F, typing.Iterable)
             replace_dict = {ui: _ui for ui, _ui in zip(u, self._u)}
             self._rhs = [ufl.replace(Fi, replace_dict) for Fi in F]
 
@@ -833,6 +835,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
         # NOTE: Should probably be possible to compile this form once.
         replacement_functions = self.get_outputs()
         F_form: typing.Union[ufl.Form, list[ufl.Form]] = []
+        assert isinstance(self._rhs, ufl.Form)
         replacement_map = self._create_replace_map(self._rhs)
         u_list = self._u if isinstance(self._u, list) else [self._u]
         for u, block in zip(u_list, replacement_functions):
@@ -842,8 +845,9 @@ class NonlinearProblemBlock(pyadjoint.Block):
             F_form = ufl.replace(self._rhs, replacement_map)
         else:
             assert isinstance(F_form, list)
-            for j in range(len(F_form)):
-                F_form[j] = ufl.replace(self._rhs[j], replacement_map)
+            assert len(F_form) == len(self._rhs)
+            for j, rhs_j in enumerate(self._rhs):
+                F_form[j] = ufl.replace(rhs_j, replacement_map)
         return F_form
 
     def _compute_residual_derivative(self) -> typing.Union[ufl.Form, list[list[ufl.Form]]]:
