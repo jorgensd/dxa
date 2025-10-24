@@ -845,6 +845,7 @@ class NonlinearProblemBlock(pyadjoint.Block):
             F_form = ufl.replace(self._rhs, replacement_map)
         else:
             assert isinstance(F_form, list)
+            assert isinstance(self._rhs, typing.Iterable)
             assert len(F_form) == len(self._rhs)
             for j, rhs_j in enumerate(self._rhs):
                 F_form[j] = ufl.replace(rhs_j, replacement_map)
