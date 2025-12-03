@@ -216,8 +216,8 @@ class AssembleBlock(Block):
             # self._cached_vectors[id(space)].array[:] = 0.0
             # assemble_compiled_form(compiled_adjoint, self._cached_vectors[id(space)])
             assemble_compiled_form(compiled_adjoint, vector)
-            # return a vector scalbed by the scalar `adj_input`
-            vector.array[:] *= adj_input
+            # return a vector scaled by the scalar `adj_input`
+            vector.array[:] *= vector.x.array.dtype.type(adj_input)
             vector.scatter_forward()
 
             return vector, dform
