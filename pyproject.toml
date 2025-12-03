@@ -19,7 +19,7 @@ dependencies = [
 test = ["pytest"]
 dev = ["pdbpp", "ipython", "mypy", "ruff"]
 docs = [
-      "jupyter-book",
+      "jupyter-book<2.0",
       "jupytext",
       "moola@git+https://github.com/funsim/moola.git",
       "pandas",
