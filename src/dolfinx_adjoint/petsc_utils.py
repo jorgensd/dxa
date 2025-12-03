@@ -2,7 +2,7 @@ import typing
 
 from petsc4py import PETSc
 
-import dolfinx
+import dolfinx.fem.petsc
 
 
 def solve_linear_problem(
