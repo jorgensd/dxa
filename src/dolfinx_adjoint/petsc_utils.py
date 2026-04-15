@@ -37,7 +37,7 @@ def solve_linear_problem(
     opts = PETSc.Options()  # type: ignore [attr-defined]
     opts.prefixPush(problem_prefix)
     for k, v in petsc_options.items():
-        opts[k] = v
+        opts.setValue(k, v)
     opts.prefixPop()
     ksp.setFromOptions()
 
@@ -49,7 +49,7 @@ def solve_linear_problem(
 
     # Free option space post setting
     for k in petsc_options.keys():
-        del opts[k]
+        opts.delValue(k)
     ksp.solve(b.petsc_vec, x.petsc_vec)
     ksp.destroy()
     x.scatter_forward()
@@ -85,5 +85,5 @@ class LinearAdjointProblem(dolfinx.fem.petsc.LinearProblem):
         # Solve linear system and update ghost values in the solution
         self._solver.solve(self._b, self._x)
         dolfinx.la.petsc._ghost_update(self._x, PETSc.InsertMode.INSERT, PETSc.ScatterMode.FORWARD)  # type: ignore
-        dolfinx.fem.petsc.assign(self._x, self._u)
+        dolfinx.fem.petsc.assign(self._x, self._u)  # type: ignore
         return self._u

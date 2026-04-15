@@ -73,7 +73,9 @@ def reference_solution(
     mesh.topology.create_connectivity(mesh.topology.dim - 1, mesh.topology.dim)
     exterior_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
     exterior_dofs = dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim - 1, exterior_facets)
-    bc = dolfinx.fem.dirichletbc(dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(0.0)), exterior_dofs, V)
+    bc = dolfinx.fem.dirichletbc(
+        dolfinx.fem.Constant(mesh, np.dtype(dolfinx.default_scalar_type).type(0.0)), exterior_dofs, V
+    )
     petsc_options = {
         "ksp_type": "preonly",
         "pc_type": "lu",
@@ -182,7 +184,9 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType, linear_solver: bool):
     x, y = ufl.SpatialCoordinate(mesh)
     d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 
-    alpha = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
+    alpha = dolfinx.fem.Constant(
+        mesh, np.dtype(dolfinx.default_scalar_type).type(1.0e-6)
+    )  # Tikhonov regularization parameter
     alpha.name = "alpha"  # type: ignore
 
     # Get reference values
@@ -206,7 +210,7 @@ def test_poisson_mother(cell_type: dolfinx.mesh.CellType, linear_solver: bool):
     mesh.topology.create_connectivity(tdim - 1, tdim)
     exterior_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
     exterior_dofs = dolfinx.fem.locate_dofs_topological(V, tdim - 1, exterior_facets)
-    zero = dolfinx.fem.Constant(mesh, dolfinx.default_scalar_type(0.0))
+    zero = dolfinx.fem.Constant(mesh, np.dtype(dolfinx.default_scalar_type).type(0.0))
     bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
 
     petsc_options = {
