@@ -76,8 +76,5 @@ def test_assign_constant(mesh_var_name: str, request, constant: typing.Union[flo
         tol=tol,
         scale=1e10,
         options={"maxiter": 200, "disp": True},
-        derivative_options={
-            "riesz_representation": "l2",
-        },
     )
     np.testing.assert_allclose(float(opt), float(c), atol=1e-5)

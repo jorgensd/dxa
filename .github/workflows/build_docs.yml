@@ -9,8 +9,6 @@ on:
 
 env:
   PUBLISH_DIR: ./_build/html
-  PYVISTA_TRAME_SERVER_PROXY_PREFIX: "/proxy/"
-  PYVISTA_TRAME_SERVER_PROXY_ENABLED: "True"
   PYVISTA_OFF_SCREEN: false
   PYVISTA_JUPYTER_BACKEND: "html"
   LIBGL_ALWAYS_SOFTWARE: 1
@@ -24,11 +22,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install graphviz
         run: apt update && apt install -y graphviz-dev
         
+      - name: Install mesa-utils
+        run: apt-get update && apt-get install -y mesa-utils 
+       
       - name: Install dependencies
         run: python3 -m pip install ".[docs]"
 
@@ -36,7 +37,7 @@ jobs:
         run: jupyter book build -W .
 
       - name: Upload artifact 
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         # always upload artifact, which can include error messages
         if: always()
         with:

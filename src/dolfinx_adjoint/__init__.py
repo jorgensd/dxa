@@ -6,7 +6,7 @@ from importlib.metadata import metadata
 import pyadjoint as _pyad
 
 from .assembly import assemble_scalar, error_norm
-from .solvers import LinearProblem
+from .solvers import LinearProblem, NonlinearProblem
 from .types import Function
 from .types.function import assign
 
@@ -24,6 +24,7 @@ _pyad.continue_annotation()
 __all__ = [
     "Function",
     "LinearProblem",
+    "NonlinearProblem",
     "assemble_scalar",
     "assign",
     "error_norm",

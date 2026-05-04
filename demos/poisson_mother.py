@@ -42,8 +42,6 @@
 # We start by import the necessary modules for this demo, which includes `mpi4py`, `dolfinx` and `dolfinx_adjoint`.
 
 # +
-import os
-import sys
 
 from mpi4py import MPI
 
@@ -69,8 +67,7 @@ import dolfinx_adjoint
 
 # + tags=["hide-input"]
 pyvista.set_jupyter_backend("html")
-if sys.platform == "linux" and (os.getenv("CI") or pyvista.OFF_SCREEN):
-    pyvista.start_xvfb(0.05)
+
 # -
 
 # + [markdown]
@@ -143,7 +140,7 @@ uh = dolfinx_adjoint.Function(V, name="State")
 
 u = ufl.TrialFunction(V)
 v = ufl.TestFunction(V)
-kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+kappa = dolfinx.fem.Constant(refined_mesh, np.dtype(dolfinx.default_scalar_type).type(1.0))  # Thermal diffusivity
 F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
 a, L = ufl.system(F)
 
@@ -152,7 +149,7 @@ a, L = ufl.system(F)
 refined_mesh.topology.create_connectivity(tdim - 1, tdim)
 exterior_facets = dolfinx.mesh.exterior_facet_indices(refined_mesh.topology)
 exterior_dofs = dolfinx.fem.locate_dofs_topological(V, tdim - 1, exterior_facets)
-zero = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(0.0))
+zero = dolfinx.fem.Constant(refined_mesh, np.dtype(dolfinx.default_scalar_type).type(0.0))
 bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
 
 # Next, we define a `dolfinx_adjoint.LinearProblem` instance, which overloads
@@ -197,7 +194,9 @@ d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 
 # The functional is written out in `ufl` and assembled with `dolfinx_adjoint.assemble_scalar`
 
-alpha = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
+alpha = dolfinx.fem.Constant(
+    refined_mesh, np.dtype(dolfinx.default_scalar_type).type(1.0e-6)
+)  # Tikhonov regularization parameter
 alpha.name = "alpha"  # type: ignore
 J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
 J = dolfinx_adjoint.assemble_scalar(J_symbolic)
@@ -357,14 +356,14 @@ def solve_optimal_problem(N: int, use_newton: bool = False) -> dict[str, float |
 
     u = ufl.TrialFunction(V)
     v = ufl.TestFunction(V)
-    kappa = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0))  # Thermal diffusivity
+    kappa = dolfinx.fem.Constant(refined_mesh, np.dtype(dolfinx.default_scalar_type).type(1.0))  # Thermal diffusivity
     F = ufl.inner(kappa * ufl.grad(u), ufl.grad(v)) * ufl.dx - f * v * ufl.dx
     a, L = ufl.system(F)
 
     refined_mesh.topology.create_connectivity(tdim - 1, tdim)
     exterior_facets = dolfinx.mesh.exterior_facet_indices(refined_mesh.topology)
     exterior_dofs = dolfinx.fem.locate_dofs_topological(V, tdim - 1, exterior_facets)
-    zero = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(0.0))
+    zero = dolfinx.fem.Constant(refined_mesh, np.dtype(dolfinx.default_scalar_type).type(0.0))
     bc = dolfinx.fem.dirichletbc(zero, exterior_dofs, V)
 
     problem = dolfinx_adjoint.LinearProblem(
@@ -375,7 +374,9 @@ def solve_optimal_problem(N: int, use_newton: bool = False) -> dict[str, float |
     x, y = ufl.SpatialCoordinate(refined_mesh)
     d = 1 / (2 * ufl.pi**2) * ufl.sin(ufl.pi * x) * ufl.sin(ufl.pi * y)
 
-    alpha = dolfinx.fem.Constant(refined_mesh, dolfinx.default_scalar_type(1.0e-6))  # Tikhonov regularization parameter
+    alpha = dolfinx.fem.Constant(
+        refined_mesh, np.dtype(dolfinx.default_scalar_type).type(1.0e-6)
+    )  # Tikhonov regularization parameter
     J_symbolic = 0.5 * ufl.inner(uh - d, uh - d) * ufl.dx + 0.5 * alpha * ufl.inner(f, f) * ufl.dx
     J = dolfinx_adjoint.assemble_scalar(J_symbolic)
 
