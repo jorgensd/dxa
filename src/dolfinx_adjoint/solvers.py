@@ -1020,8 +1020,10 @@ class NonlinearProblem(_ProblemBase, dolfinx.fem.petsc.NonlinearProblem):
         coefficients = collect_coefficients(F) - set(u_list)
         if J is not None:
             coefficients |= collect_coefficients(J) - set(u_list)
+        # Has to be sorted when creating placeholders, as function creation is a collective operation
+        sorted_coefficients = sorted(coefficients, key=lambda c: c.ufl_id())
         self._value_placeholders: dict[dolfinx.fem.Function, dolfinx.fem.Function] = {
-            c: dolfinx.fem.Function(c.function_space) for c in coefficients
+            c: dolfinx.fem.Function(c.function_space) for c in sorted_coefficients
         }
 
         # Initialize nonlinear solver
