@@ -965,35 +965,41 @@ class LinearProblemBlock(_ProblemBlockBase):
 
         # To ensure that the solver can be recycled in time dependent loops, the unknown is also added as a dependency
         # if present in the form.
+        coeffs: set[Function]
         if isinstance(self._u, dolfinx.fem.Function):
             assert isinstance(self._lhs, ufl.Form)
             assert isinstance(self._rhs, ufl.Form)
             if self._u in self._lhs.coefficients() or self._u in self._rhs.coefficients():
                 raise RuntimeError("The unknown function u should not be present in the variational forms a or L.")
-            for c in self._lhs.coefficients():
-                self.add_dependency(c, no_duplicates=True)
-            for c in self._rhs.coefficients():
-                self.add_dependency(c, no_duplicates=True)
+            coeffs = set(self._lhs.coefficients() + self._rhs.coefficients())
         elif isinstance(self._u, typing.Iterable):
+            coeffs = set()
             for Ai in self._lhs:  # type: ignore
                 for Aij in Ai:
                     if Aij is not None:
                         assert isinstance(Aij, ufl.Form)
-                        for c in Aij.coefficients():
+                        A_ij_coeffs = set(Aij.coefficients())
+                        coeffs |= A_ij_coeffs
+                        for c in A_ij_coeffs:
                             if c in self._u:
                                 raise RuntimeError(
                                     "The unknown function u should not be present in the variational forms a or L."
                                 )
-                            self.add_dependency(c, no_duplicates=True)
             for part in self._rhs:  # type: ignore
-                for c in part.coefficients():
+                bi_coeffs = set(part.coefficients())
+                coeffs |= bi_coeffs
+                for c in bi_coeffs:
                     if c in self._u:
                         raise RuntimeError(
                             "The unknown function u should not be present in the variational forms a or L."
                         )
-                    self.add_dependency(c, no_duplicates=True)
         else:
             raise RuntimeError(f"Unknown type for unknown function u={type(self._u)}.")
+
+        sorted_coefficients = sorted(coeffs, key=lambda c: c.ufl_id())
+        for c in sorted_coefficients:
+            self.add_dependency(c, no_duplicates=True)
+
         # Cache form parameters for later
         # NOTE: Should probably be in a struct
         self._jit_options = jit_options
@@ -1188,9 +1194,10 @@ class NonlinearProblemBlock(_ProblemBlockBase):
 
         # NOTE: Add mesh and constants as dependencies later on
         u_list = self._u if isinstance(self._u, list) else [self._u]
-        for c in collect_coefficients(J) - set(u_list):
-            self.add_dependency(c, no_duplicates=True)
-        for c in collect_coefficients(self._rhs) - set(u_list):
+        coeffs = collect_coefficients(J) | collect_coefficients(self._rhs)
+        coeffs -= set(u_list)
+        sorted_coeffs = sorted(coeffs, key=lambda c: c.ufl_id())
+        for c in sorted_coeffs:
             self.add_dependency(c, no_duplicates=True)
 
         # Cache form parameters for later
