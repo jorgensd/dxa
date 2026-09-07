@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import gc
 import typing
 import warnings
 import weakref
@@ -1062,7 +1063,7 @@ class LinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.LinearProblem`, built from the ``a``/``L``/bcs/
             options this block itself stored at construction time.
         """
-        from ..solvers import LinearProblem
+        from ..solvers import LinearProblem, _PROBLEM_PREFIX_COUNTER
 
         warnings.warn(
             "This block's LinearProblem was garbage collected before being "
@@ -1071,6 +1072,11 @@ class LinearProblemBlock(_ProblemBlockBase):
             "replay to avoid this cost.",
             stacklevel=4,
         )
+        prefix = f"RebuiltLinearProblem_{next(_PROBLEM_PREFIX_COUNTER)}_"
+
+        gc.collect()  # reclaim whatever's floating in the last rebuild's cyclic garbage
+        # before allocating fresh PETSc/communicator resources for this one
+
         return LinearProblem(
             self._lhs,  # type: ignore[arg-type]
             self._rhs,  # type: ignore[arg-type]
@@ -1079,7 +1085,7 @@ class LinearProblemBlock(_ProblemBlockBase):
             P=self._preconditioner,  # type: ignore[arg-type]
             kind=self._kind,
             petsc_options=self._petsc_options,
-            petsc_options_prefix=self._petsc_options_prefix,
+            petsc_options_prefix=prefix,
             adjoint_petsc_options=self._adjoint_petsc_options,
             tlm_petsc_options=self._tlm_petsc_options,
             form_compiler_options=self._form_compiler_options,
@@ -1260,7 +1266,7 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.NonlinearProblem`, built from the ``F``/``J``/
             bcs/options this block itself stored at construction time.
         """
-        from ..solvers import NonlinearProblem
+        from ..solvers import NonlinearProblem, _PROBLEM_PREFIX_COUNTER
 
         warnings.warn(
             "This block's NonlinearProblem was garbage collected before being "
@@ -1269,6 +1275,10 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             "replay to avoid this cost.",
             stacklevel=4,
         )
+        gc.collect()  # reclaim whatever's floating in the last rebuild's cyclic garbage
+        # before allocating fresh PETSc/communicator resources for this one
+
+        prefix = f"RebuiltNonlinearProblem_{next(_PROBLEM_PREFIX_COUNTER)}_"
         return NonlinearProblem(
             self._rhs,  # type: ignore[arg-type]
             u=self._u,  # type: ignore[arg-type]
@@ -1277,7 +1287,7 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             P=self._preconditioner,  # type: ignore[arg-type]
             kind=self._kind,
             petsc_options=self._petsc_options,
-            petsc_options_prefix=self._petsc_options_prefix,
+            petsc_options_prefix=prefix,
             adjoint_petsc_options=self._adjoint_petsc_options,
             tlm_petsc_options=self._tlm_petsc_options,
             form_compiler_options=self._form_compiler_options,
