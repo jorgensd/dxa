@@ -1063,7 +1063,7 @@ class LinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.LinearProblem`, built from the ``a``/``L``/bcs/
             options this block itself stored at construction time.
         """
-        from ..solvers import LinearProblem, _PROBLEM_PREFIX_COUNTER
+        from ..solvers import _PROBLEM_PREFIX_COUNTER, LinearProblem
 
         warnings.warn(
             "This block's LinearProblem was garbage collected before being "
@@ -1266,7 +1266,7 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.NonlinearProblem`, built from the ``F``/``J``/
             bcs/options this block itself stored at construction time.
         """
-        from ..solvers import NonlinearProblem, _PROBLEM_PREFIX_COUNTER
+        from ..solvers import _PROBLEM_PREFIX_COUNTER, NonlinearProblem
 
         warnings.warn(
             "This block's NonlinearProblem was garbage collected before being "
