@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import gc
 import typing
 import warnings
 import weakref
@@ -539,14 +540,27 @@ class _ProblemBlockBase(pyadjoint.Block, abc.ABC):
         Returns:
             An isolated copy of this output, so this tape block's own checkpoint
             stays stable even if the shared Problem's unknown is later overwritten
-            by another block's recompute. Reuses ``block_variable.checkpoint`` in
-            place when one already exists (mirroring
-            {py:class}`~dolfinx_adjoint.blocks.interpolation.InterpolationBlock`'s
-            recompute and Firedrake's equivalent ``GenericSolveBlock.recompute_component``),
-            since {py:meth}`~dolfinx_adjoint.types.function.Function._ad_create_checkpoint`
+            by another block's recompute. Always goes through
+            {py:meth}`~dolfinx_adjoint.types.function.Function._ad_create_checkpoint`
             -- not a bare ``.copy()``, which always returns a plain, non-overloaded
-            ``dolfinx.fem.Function`` regardless of the source's concrete type -- is what
-            correctly builds a *new* one when none exists yet.
+            ``dolfinx.fem.Function`` regardless of the source's concrete type, and not
+            a reuse of ``block_variable.checkpoint`` in place, which would silently
+            bypass the disk-checkpointing seam that ``_ad_create_checkpoint`` provides
+            (see ``maybe_disk_checkpoint`` in
+            {py:mod}`~dolfinx_adjoint.checkpointing`) on every recompute after the
+            first, and would corrupt any earlier checkpoint that a schedule such as
+            {py:class}`~checkpoint_schedules.Revolve` still holds a live reference to.
+
+        Note:
+            This allocates a function on every recompute, where reusing the existing
+            checkpoint in place would not. Reinstating that reuse behind a "no schedule is
+            active" test was considered and rejected on measurement: across an evaluation
+            and its adjoint of a 40-step heat equation, all
+            ``_ad_create_checkpoint`` calls together account for 2.9 ms of 263 ms, and
+            end-to-end the two are indistinguishable. That is not worth a second code path
+            whose safety rests on an invariant about pyadjoint's internals -- that
+            ``TimeStep.checkpoint`` aliases ``BlockVariable._checkpoint`` for global
+            dependencies, and ``restore_from_checkpoint`` hands the same object back.
         """
         if isinstance(prepared, Function):
             assert idx == 0
@@ -554,11 +568,6 @@ class _ProblemBlockBase(pyadjoint.Block, abc.ABC):
         else:
             assert isinstance(prepared, typing.Sequence)
             source = prepared[idx]
-        checkpoint = block_variable.checkpoint
-        if isinstance(checkpoint, Function):
-            checkpoint.x.array[:] = source.x.array[:]
-            checkpoint.x.scatter_forward()
-            return checkpoint
         return source._ad_create_checkpoint()
 
     def prepare_evaluate_hessian(self, inputs, hessian_inputs, adj_inputs, relevant_dependencies):
@@ -957,35 +966,41 @@ class LinearProblemBlock(_ProblemBlockBase):
 
         # To ensure that the solver can be recycled in time dependent loops, the unknown is also added as a dependency
         # if present in the form.
+        coeffs: set[Function]
         if isinstance(self._u, dolfinx.fem.Function):
             assert isinstance(self._lhs, ufl.Form)
             assert isinstance(self._rhs, ufl.Form)
             if self._u in self._lhs.coefficients() or self._u in self._rhs.coefficients():
                 raise RuntimeError("The unknown function u should not be present in the variational forms a or L.")
-            for c in self._lhs.coefficients():
-                self.add_dependency(c, no_duplicates=True)
-            for c in self._rhs.coefficients():
-                self.add_dependency(c, no_duplicates=True)
+            coeffs = set(self._lhs.coefficients() + self._rhs.coefficients())
         elif isinstance(self._u, typing.Iterable):
+            coeffs = set()
             for Ai in self._lhs:  # type: ignore
                 for Aij in Ai:
                     if Aij is not None:
                         assert isinstance(Aij, ufl.Form)
-                        for c in Aij.coefficients():
+                        A_ij_coeffs = set(Aij.coefficients())
+                        coeffs |= A_ij_coeffs
+                        for c in A_ij_coeffs:
                             if c in self._u:
                                 raise RuntimeError(
                                     "The unknown function u should not be present in the variational forms a or L."
                                 )
-                            self.add_dependency(c, no_duplicates=True)
             for part in self._rhs:  # type: ignore
-                for c in part.coefficients():
+                bi_coeffs = set(part.coefficients())
+                coeffs |= bi_coeffs
+                for c in bi_coeffs:
                     if c in self._u:
                         raise RuntimeError(
                             "The unknown function u should not be present in the variational forms a or L."
                         )
-                    self.add_dependency(c, no_duplicates=True)
         else:
             raise RuntimeError(f"Unknown type for unknown function u={type(self._u)}.")
+
+        sorted_coefficients = sorted(coeffs, key=lambda c: c.ufl_id())
+        for c in sorted_coefficients:
+            self.add_dependency(c, no_duplicates=True)
+
         # Cache form parameters for later
         # NOTE: Should probably be in a struct
         self._jit_options = jit_options
@@ -1048,7 +1063,7 @@ class LinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.LinearProblem`, built from the ``a``/``L``/bcs/
             options this block itself stored at construction time.
         """
-        from ..solvers import LinearProblem
+        from ..solvers import _PROBLEM_PREFIX_COUNTER, LinearProblem
 
         warnings.warn(
             "This block's LinearProblem was garbage collected before being "
@@ -1057,6 +1072,11 @@ class LinearProblemBlock(_ProblemBlockBase):
             "replay to avoid this cost.",
             stacklevel=4,
         )
+        prefix = f"RebuiltLinearProblem_{next(_PROBLEM_PREFIX_COUNTER)}_"
+
+        gc.collect()  # reclaim whatever's floating in the last rebuild's cyclic garbage
+        # before allocating fresh PETSc/communicator resources for this one
+
         return LinearProblem(
             self._lhs,  # type: ignore[arg-type]
             self._rhs,  # type: ignore[arg-type]
@@ -1065,7 +1085,7 @@ class LinearProblemBlock(_ProblemBlockBase):
             P=self._preconditioner,  # type: ignore[arg-type]
             kind=self._kind,
             petsc_options=self._petsc_options,
-            petsc_options_prefix=self._petsc_options_prefix,
+            petsc_options_prefix=prefix,
             adjoint_petsc_options=self._adjoint_petsc_options,
             tlm_petsc_options=self._tlm_petsc_options,
             form_compiler_options=self._form_compiler_options,
@@ -1180,9 +1200,10 @@ class NonlinearProblemBlock(_ProblemBlockBase):
 
         # NOTE: Add mesh and constants as dependencies later on
         u_list = self._u if isinstance(self._u, list) else [self._u]
-        for c in collect_coefficients(J) - set(u_list):
-            self.add_dependency(c, no_duplicates=True)
-        for c in collect_coefficients(self._rhs) - set(u_list):
+        coeffs = collect_coefficients(J) | collect_coefficients(self._rhs)
+        coeffs -= set(u_list)
+        sorted_coeffs = sorted(coeffs, key=lambda c: c.ufl_id())
+        for c in sorted_coeffs:
             self.add_dependency(c, no_duplicates=True)
 
         # Cache form parameters for later
@@ -1245,7 +1266,7 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             A freshly constructed {py:class}`~dolfinx_adjoint.NonlinearProblem`, built from the ``F``/``J``/
             bcs/options this block itself stored at construction time.
         """
-        from ..solvers import NonlinearProblem
+        from ..solvers import _PROBLEM_PREFIX_COUNTER, NonlinearProblem
 
         warnings.warn(
             "This block's NonlinearProblem was garbage collected before being "
@@ -1254,6 +1275,10 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             "replay to avoid this cost.",
             stacklevel=4,
         )
+        gc.collect()  # reclaim whatever's floating in the last rebuild's cyclic garbage
+        # before allocating fresh PETSc/communicator resources for this one
+
+        prefix = f"RebuiltNonlinearProblem_{next(_PROBLEM_PREFIX_COUNTER)}_"
         return NonlinearProblem(
             self._rhs,  # type: ignore[arg-type]
             u=self._u,  # type: ignore[arg-type]
@@ -1262,7 +1287,7 @@ class NonlinearProblemBlock(_ProblemBlockBase):
             P=self._preconditioner,  # type: ignore[arg-type]
             kind=self._kind,
             petsc_options=self._petsc_options,
-            petsc_options_prefix=self._petsc_options_prefix,
+            petsc_options_prefix=prefix,
             adjoint_petsc_options=self._adjoint_petsc_options,
             tlm_petsc_options=self._tlm_petsc_options,
             form_compiler_options=self._form_compiler_options,
